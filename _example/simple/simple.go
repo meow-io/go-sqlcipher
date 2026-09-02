@@ -3,10 +3,9 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	_ "github.com/meow-io/go-sqlcipher"
 	"log"
 	"os"
-
-	_ "github.com/meow-io/go-sqlcipher"
 )
 
 func main() {

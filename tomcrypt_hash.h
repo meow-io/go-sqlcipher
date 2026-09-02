@@ -14,6 +14,18 @@ struct sha3_state {
 };
 #endif
 
+#ifdef LTC_KANGAROO_TWELVE
+struct kangaroo_twelve_state {
+    struct sha3_state outer;
+    struct sha3_state inner;
+    ulong64 blocks_count;
+    ulong64 customization_len;
+    unsigned short remaining; /* bytes out of 8kB block */
+    unsigned char phase; /* 0 -- initial, 1 -- additional */
+    unsigned char finished; /* 0 -- false, 1 -- true */
+};
+#endif
+
 #ifdef LTC_SHA512
 struct sha512_state {
     ulong64  length, state[8];
@@ -57,8 +69,8 @@ struct md4_state {
 #ifdef LTC_TIGER
 struct tiger_state {
     ulong64 state[3], length;
-    unsigned long curlen;
-    unsigned char buf[64];
+    unsigned long curlen, passes;
+    unsigned char buf[64], pad;
 };
 #endif
 
@@ -117,6 +129,14 @@ struct chc_state {
 };
 #endif
 
+#ifdef LTC_SM3
+struct sm3_state {
+    ulong64 length;
+    ulong32 state[8], curlen;
+    unsigned char buf[64];
+};
+#endif
+
 #ifdef LTC_BLAKE2S
 struct blake2s_state {
     ulong32 h[8];
@@ -141,6 +161,19 @@ struct blake2b_state {
 };
 #endif
 
+#ifdef LTC_BLAKE3
+struct blake3_state {
+    unsigned char input[64];    /* current input block (not yet compressed) */
+    ulong32 cv_buf[54 * 8];     /* chaining-value stack (54 levels x 8 words) */
+    ulong32 key[8];             /* mode key: IV, user key, or derived context key */
+    ulong32 cv_off;             /* top-of-stack index into cv_buf (units: 8 words) */
+    ulong32 bytes;              /* bytes buffered in input[] */
+    ulong32 block;              /* block index within current chunk (0-15) */
+    ulong32 flags;              /* mode flags ORed into every compress call */
+    ulong64 chunk;              /* completed-chunk counter */
+};
+#endif
+
 typedef union Hash_state {
     char dummy[1];
 #ifdef LTC_CHC_HASH
@@ -152,6 +185,9 @@ typedef union Hash_state {
 #if defined(LTC_SHA3) || defined(LTC_KECCAK)
     struct sha3_state sha3;
 #endif
+#ifdef LTC_KANGAROO_TWELVE
+    struct kangaroo_twelve_state kt;
+#endif
 #ifdef LTC_SHA512
     struct sha512_state sha512;
 #endif
@@ -159,7 +195,7 @@ typedef union Hash_state {
     struct sha256_state sha256;
 #endif
 #ifdef LTC_SHA1
-    struct sha1_state   sha1;
+    struct sha1_state sha1;
 #endif
 #ifdef LTC_MD5
     struct md5_state    md5;
@@ -190,6 +226,12 @@ typedef union Hash_state {
 #endif
 #ifdef LTC_BLAKE2B
     struct blake2b_state blake2b;
+#endif
+#ifdef LTC_SM3
+    struct sm3_state sm3;
+#endif
+#ifdef LTC_BLAKE3
+    struct blake3_state blake3;
 #endif
 
     void *data;
@@ -277,6 +319,18 @@ extern const struct ltc_hash_descriptor sha3_256_desc;
 int sha3_224_test(void);
 extern const struct ltc_hash_descriptor sha3_224_desc;
 int sha3_done(hash_state *md, unsigned char *out);
+/* SHAKE128 with digest length according to RFC 8702 */
+int sha3_shake128_init(hash_state *md);
+#define sha3_shake128_process(a,b,c) sha3_process(a,b,c)
+int sha3_shake128_done(hash_state *md, unsigned char *out);
+int sha3_shake128_test(void);
+extern const struct ltc_hash_descriptor shake128_desc;
+/* SHAKE256 with digest length according to RFC 8702 */
+int sha3_shake256_init(hash_state *md);
+#define sha3_shake256_process(a,b,c) sha3_process(a,b,c)
+int sha3_shake256_done(hash_state *md, unsigned char *out);
+int sha3_shake256_test(void);
+extern const struct ltc_hash_descriptor shake256_desc;
 /* SHAKE128 + SHAKE256 */
 int sha3_shake_init(hash_state *md, int num);
 #define sha3_shake_process(a,b,c) sha3_process(a,b,c)
@@ -291,15 +345,30 @@ int sha3_shake_memory(int num, const unsigned char *in, unsigned long inlen, uns
 #define keccak_256_init(a)    sha3_256_init(a)
 #define keccak_224_init(a)    sha3_224_init(a)
 #define keccak_process(a,b,c) sha3_process(a,b,c)
-extern const struct ltc_hash_descriptor keccak_512_desc;
+extern const struct ltc_hash_descriptor keccak512_desc;
 int keccak_512_test(void);
-extern const struct ltc_hash_descriptor keccak_384_desc;
+extern const struct ltc_hash_descriptor keccak384_desc;
 int keccak_384_test(void);
-extern const struct ltc_hash_descriptor keccak_256_desc;
+extern const struct ltc_hash_descriptor keccak256_desc;
 int keccak_256_test(void);
-extern const struct ltc_hash_descriptor keccak_224_desc;
+extern const struct ltc_hash_descriptor keccak224_desc;
 int keccak_224_test(void);
 int keccak_done(hash_state *md, unsigned char *out);
+#endif
+
+#ifdef LTC_TURBO_SHAKE
+#define turbo_shake_init(a, b) sha3_shake_init(a, b)
+int turbo_shake_process(hash_state *md, const unsigned char *in, unsigned long inlen);
+int turbo_shake_done(hash_state *md, unsigned char *out, unsigned long outlen);
+int turbo_shake_test(void);
+#endif
+
+#ifdef LTC_KANGAROO_TWELVE
+int kangaroo_twelve_init(hash_state *md, int num);
+int kangaroo_twelve_process(hash_state *md, const unsigned char *in, unsigned long inlen);
+int kangaroo_twelve_customization(hash_state *md, const unsigned char *in, unsigned long inlen);
+int kangaroo_twelve_done(hash_state *md, unsigned char *out, unsigned long outlen);
+int kangaroo_twelve_test(void);
 #endif
 
 #ifdef LTC_SHA512
@@ -308,7 +377,21 @@ int sha512_process(hash_state * md, const unsigned char *in, unsigned long inlen
 int sha512_done(hash_state * md, unsigned char *out);
 int sha512_test(void);
 extern const struct ltc_hash_descriptor sha512_desc;
-#endif
+
+#define sha512_c_init sha512_init
+int sha512_c_process(hash_state * md, const unsigned char *in, unsigned long inlen);
+int sha512_c_done(hash_state * md, unsigned char *out);
+int sha512_c_test(void);
+extern const struct ltc_hash_descriptor sha512_portable_desc;
+
+#ifdef LTC_SHA512_X86
+#define sha512_x86_init sha512_init
+int sha512_x86_process(hash_state * md, const unsigned char *in, unsigned long inlen);
+int sha512_x86_done(hash_state * md, unsigned char *out);
+int sha512_x86_test(void);
+extern const struct ltc_hash_descriptor sha512_x86_desc;
+#endif /* LTC_SHA512_X86 */
+#endif /* LTC_SHA512 */
 
 #ifdef LTC_SHA384
 #ifndef LTC_SHA512
@@ -319,7 +402,21 @@ int sha384_init(hash_state * md);
 int sha384_done(hash_state * md, unsigned char *out);
 int sha384_test(void);
 extern const struct ltc_hash_descriptor sha384_desc;
-#endif
+
+#define sha384_c_init sha384_init
+#define sha384_c_process sha512_c_process
+int sha384_c_done(hash_state * md, unsigned char *out);
+int sha384_c_test(void);
+extern const struct ltc_hash_descriptor sha384_portable_desc;
+
+#ifdef LTC_SHA384_X86
+#define sha384_x86_init sha384_init
+#define sha384_x86_process sha512_x86_process
+int sha384_x86_done(hash_state * md, unsigned char *out);
+int sha384_x86_test(void);
+extern const struct ltc_hash_descriptor sha384_x86_desc;
+#endif /* LTC_SHA384_X86 */
+#endif /* LTC_SHA384 */
 
 #ifdef LTC_SHA512_256
 #ifndef LTC_SHA512
@@ -330,7 +427,21 @@ int sha512_256_init(hash_state * md);
 int sha512_256_done(hash_state * md, unsigned char *out);
 int sha512_256_test(void);
 extern const struct ltc_hash_descriptor sha512_256_desc;
-#endif
+
+#define sha512_256_c_init sha512_256_init
+#define sha512_256_c_process sha512_c_process
+int sha512_256_c_done(hash_state * md, unsigned char *out);
+int sha512_256_c_test(void);
+extern const struct ltc_hash_descriptor sha512_256_portable_desc;
+
+#ifdef LTC_SHA512_256_X86
+#define sha512_256_x86_init sha512_256_init
+#define sha512_256_x86_process sha512_x86_process
+int sha512_256_x86_done(hash_state * md, unsigned char *out);
+int sha512_256_x86_test(void);
+extern const struct ltc_hash_descriptor sha512_256_x86_desc;
+#endif /* LTC_SHA512_256_X86 */
+#endif /* LTC_SHA512_256 */
 
 #ifdef LTC_SHA512_224
 #ifndef LTC_SHA512
@@ -341,7 +452,24 @@ int sha512_224_init(hash_state * md);
 int sha512_224_done(hash_state * md, unsigned char *out);
 int sha512_224_test(void);
 extern const struct ltc_hash_descriptor sha512_224_desc;
-#endif
+
+#define sha512_224_c_init sha512_224_init
+#define sha512_224_c_process sha512_c_process
+int sha512_224_c_done(hash_state * md, unsigned char *out);
+int sha512_224_c_test(void);
+extern const struct ltc_hash_descriptor sha512_224_portable_desc;
+
+#ifdef LTC_SHA512_224_X86
+#define sha512_224_x86_init sha512_224_init
+#define sha512_224_x86_process sha512_x86_process
+int sha512_224_x86_done(hash_state * md, unsigned char *out);
+int sha512_224_x86_test(void);
+extern const struct ltc_hash_descriptor sha512_224_x86_desc;
+#endif /* LTC_SHA512_224_X86 */
+#endif /* LTC_SHA512_224 */
+
+int shani_is_supported(void);
+int sha512ni_is_supported(void);
 
 #ifdef LTC_SHA256
 int sha256_init(hash_state * md);
@@ -349,6 +477,21 @@ int sha256_process(hash_state * md, const unsigned char *in, unsigned long inlen
 int sha256_done(hash_state * md, unsigned char *out);
 int sha256_test(void);
 extern const struct ltc_hash_descriptor sha256_desc;
+
+#define sha256_c_init sha256_init
+int sha256_c_process(hash_state * md, const unsigned char *in, unsigned long inlen);
+int sha256_c_done(hash_state * md, unsigned char *out);
+int sha256_c_test(void);
+extern const struct ltc_hash_descriptor sha256_portable_desc;
+
+#ifdef LTC_SHA256_X86
+#define sha256_x86_init sha256_init
+int sha256_x86_process(hash_state * md, const unsigned char *in, unsigned long inlen);
+int sha256_x86_done(hash_state * md, unsigned char *out);
+int sha256_x86_test(void);
+extern const struct ltc_hash_descriptor sha256_x86_desc;
+#endif /* LTC_SHA256_X86 */
+#endif /* LTC_SHA256 */
 
 #ifdef LTC_SHA224
 #ifndef LTC_SHA256
@@ -359,8 +502,21 @@ int sha224_init(hash_state * md);
 int sha224_done(hash_state * md, unsigned char *out);
 int sha224_test(void);
 extern const struct ltc_hash_descriptor sha224_desc;
-#endif
-#endif
+
+#define sha224_c_init sha224_init
+#define sha224_c_process sha256_c_process
+int sha224_c_done(hash_state * md, unsigned char *out);
+int sha224_c_test(void);
+extern const struct ltc_hash_descriptor sha224_portable_desc;
+
+#ifdef LTC_SHA224_X86
+#define sha224_x86_init sha224_init
+#define sha224_x86_process sha256_x86_process
+int sha224_x86_done(hash_state * md, unsigned char *out);
+int sha224_x86_test(void);
+extern const struct ltc_hash_descriptor sha224_x86_desc;
+#endif /* LTC_SHA224_X86 */
+#endif /* LTC_SHA224 */
 
 #ifdef LTC_SHA1
 int sha1_init(hash_state * md);
@@ -368,7 +524,21 @@ int sha1_process(hash_state * md, const unsigned char *in, unsigned long inlen);
 int sha1_done(hash_state * md, unsigned char *out);
 int sha1_test(void);
 extern const struct ltc_hash_descriptor sha1_desc;
-#endif
+
+#define sha1_c_init sha1_init
+int sha1_c_process(hash_state * md, const unsigned char *in, unsigned long inlen);
+int sha1_c_done(hash_state * md, unsigned char *out);
+int sha1_c_test(void);
+extern const struct ltc_hash_descriptor sha1_portable_desc;
+
+#ifdef LTC_SHA1_X86
+#define sha1_x86_init sha1_init
+int sha1_x86_process(hash_state * md, const unsigned char *in, unsigned long inlen);
+int sha1_x86_done(hash_state * md, unsigned char *out);
+int sha1_x86_test(void);
+extern const struct ltc_hash_descriptor sha1_x86_desc;
+#endif /* LTC_SHA1_X86 */
+#endif /* LTC_SHA1 */
 
 #ifdef LTC_BLAKE2S
 extern const struct ltc_hash_descriptor blake2s_256_desc;
@@ -414,6 +584,24 @@ int blake2b_process(hash_state * md, const unsigned char *in, unsigned long inle
 int blake2b_done(hash_state * md, unsigned char *out);
 #endif
 
+#ifdef LTC_SM3
+int sm3_init(hash_state * md);
+int sm3_process(hash_state * md, const unsigned char *in, unsigned long inlen);
+int sm3_done(hash_state * md, unsigned char *out);
+int sm3_test(void);
+extern const struct ltc_hash_descriptor sm3_desc;
+#endif
+
+#ifdef LTC_BLAKE3
+int blake3_init(hash_state *md);
+int blake3_keyed_init(hash_state *md, const unsigned char *key, unsigned long keylen);
+int blake3_derive_key_init(hash_state *md, const unsigned char *context, unsigned long contextlen);
+int blake3_process(hash_state *md, const unsigned char *in, unsigned long inlen);
+int blake3_done(hash_state *md, unsigned char *out);
+int blake3_test(void);
+extern const struct ltc_hash_descriptor blake3_desc;
+#endif
+
 #ifdef LTC_MD5
 int md5_init(hash_state * md);
 int md5_process(hash_state * md, const unsigned char *in, unsigned long inlen);
@@ -440,10 +628,16 @@ extern const struct ltc_hash_descriptor md2_desc;
 
 #ifdef LTC_TIGER
 int tiger_init(hash_state * md);
+int tiger_init_ex(hash_state *md, unsigned long passes);
 int tiger_process(hash_state * md, const unsigned char *in, unsigned long inlen);
 int tiger_done(hash_state * md, unsigned char *out);
 int tiger_test(void);
-extern const struct ltc_hash_descriptor tiger_desc;
+int tiger2_init(hash_state *md);
+int tiger2_init_ex(hash_state *md, unsigned long passes);
+#define tiger2_process(m, i, l) tiger_process(m, i, l)
+#define tiger2_done(m, o)       tiger_done(m, o)
+int tiger2_test(void);
+extern const struct ltc_hash_descriptor tiger_desc, tiger2_desc;
 #endif
 
 #ifdef LTC_RIPEMD128

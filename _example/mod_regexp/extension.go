@@ -3,9 +3,8 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"log"
-
 	sqlite3 "github.com/meow-io/go-sqlcipher"
+	"log"
 )
 
 func main() {

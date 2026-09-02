@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"io/ioutil"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/meow-io/go-sqlcipher"
 )
 
 func FuzzOpenExec(data []byte) int {
@@ -22,7 +22,7 @@ func FuzzOpenExec(data []byte) int {
 		return 0
 	}
 	defer db.Close()
-	_, err = db.Exec(string(data[:sep-1]))
+	_, err = db.Exec(string(data[:sep]))
 	if err != nil {
 		return 0
 	}

@@ -10,9 +10,9 @@ import (
 	sqlite3 "github.com/meow-io/go-sqlcipher"
 )
 
-func createBulkInsertQuery(n int, start int) (query string, args []interface{}) {
+func createBulkInsertQuery(n int, start int) (query string, args []any) {
 	values := make([]string, n)
-	args = make([]interface{}, n*2)
+	args = make([]any, n*2)
 	pos := 0
 	for i := 0; i < n; i++ {
 		values[i] = "(?, ?)"
@@ -27,11 +27,12 @@ func createBulkInsertQuery(n int, start int) (query string, args []interface{}) 
 	return
 }
 
-func bulkInsert(db *sql.DB, query string, args []interface{}) (err error) {
+func bulkInsert(db *sql.DB, query string, args []any) (err error) {
 	stmt, err := db.Prepare(query)
 	if err != nil {
 		return
 	}
+	defer stmt.Close()
 
 	_, err = stmt.Exec(args...)
 	if err != nil {
@@ -89,11 +90,13 @@ func main() {
 
 	query, args = createBulkInsertQuery(num, num)
 	err = bulkInsert(db, query, args)
-	if err != nil {
-		if err != nil {
-			log.Printf("expect failed since SQLITE_LIMIT_VARIABLE_NUMBER is too small: %v", err)
-		}
+	if err == nil {
+		log.Fatal("expected failure since SQLITE_LIMIT_VARIABLE_NUMBER is too small, but insert succeeded")
 	}
+	if !strings.Contains(err.Error(), "too many SQL variables") {
+		log.Fatalf("expected too many SQL variables error, got: %v", err)
+	}
+	log.Printf("expect failed since SQLITE_LIMIT_VARIABLE_NUMBER is too small: %v", err)
 
 	bigLimitVariableNumber := 999999
 	sqlite3conn.SetLimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, bigLimitVariableNumber)
@@ -104,9 +107,7 @@ func main() {
 	query, args = createBulkInsertQuery(500, num+num)
 	err = bulkInsert(db, query, args)
 	if err != nil {
-		if err != nil {
-			log.Fatal(err)
-		}
+		log.Fatal(err)
 	}
 
 	log.Println("no error if SQLITE_LIMIT_VARIABLE_NUMBER > 999")

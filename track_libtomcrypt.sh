@@ -27,6 +27,7 @@ cp -f $ltd/src/headers/tomcrypt_prng.h .
 
 # copy C files
 cp -f $ltd/src/ciphers/aes/aes.c .
+cp -f $ltd/src/ciphers/aes/aes_desc.c .
 cp -f $ltd/src/ciphers/aes/aes_tab.c aes_tab.h
 cp -f $ltd/src/misc/burn_stack.c .
 cp -f $ltd/src/misc/compare_testvector.c .
@@ -34,6 +35,11 @@ cp -f $ltd/src/modes/cbc/cbc_decrypt.c .
 cp -f $ltd/src/modes/cbc/cbc_done.c .
 cp -f $ltd/src/modes/cbc/cbc_encrypt.c .
 cp -f $ltd/src/modes/cbc/cbc_start.c .
+# aes_desc.c's self-test drives the cipher through ECB
+cp -f $ltd/src/modes/ecb/ecb_decrypt.c .
+cp -f $ltd/src/modes/ecb/ecb_done.c .
+cp -f $ltd/src/modes/ecb/ecb_encrypt.c .
+cp -f $ltd/src/modes/ecb/ecb_start.c .
 cp -f $ltd/src/misc/crypt/crypt_argchk.c .
 cp -f $ltd/src/misc/crypt/crypt_cipher_descriptor.c .
 cp -f $ltd/src/misc/crypt/crypt_cipher_is_valid.c .
@@ -46,6 +52,7 @@ cp -f $ltd/src/misc/crypt/crypt_register_cipher.c .
 cp -f $ltd/src/misc/crypt/crypt_register_hash.c .
 cp -f $ltd/src/misc/crypt/crypt_register_prng.c .
 cp -f $ltd/src/prngs/fortuna.c .
+cp -f $ltd/src/prngs/rng_get_bytes.c .
 cp -f $ltd/src/hashes/helper/hash_memory.c .
 cp -f $ltd/src/mac/hmac/hmac_done.c .
 cp -f $ltd/src/mac/hmac/hmac_init.c .
@@ -53,8 +60,11 @@ cp -f $ltd/src/mac/hmac/hmac_memory.c .
 cp -f $ltd/src/mac/hmac/hmac_process.c .
 cp -f $ltd/src/misc/pkcs5/pkcs_5_2.c .
 cp -f $ltd/src/hashes/sha1.c .
+cp -f $ltd/src/hashes/sha1_desc.c .
 cp -f $ltd/src/hashes/sha2/sha256.c .
+cp -f $ltd/src/hashes/sha2/sha256_desc.c .
 cp -f $ltd/src/hashes/sha2/sha512.c .
+cp -f $ltd/src/hashes/sha2/sha512_desc.c .
 cp -f $ltd/src/misc/zeromem.c .
 
 echo "make sure aes.c includes aes_tab.h instead of aes_tab.c!"

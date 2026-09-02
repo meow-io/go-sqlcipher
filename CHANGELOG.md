@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0 - Sep 2nd 2026
+
+Upgrade to v4.18.0 of sqlcipher and v1.14.50 of go-sqlite3, and update [libtomcrypt](https://github.com/libtom/libtomcrypt) to digest 6c6d5104de66f3ca0dfd7b68540ef86869982b07.
+
+This raises the minimum Go version to 1.21, as go-sqlite3 now uses `any`, `unsafe.Slice` and `unsafe.StringData`.
+
 ## 1.0.3 - Sep 1st 2023
 
 Upgrade to v4.5.5 of sqlcipher and v1.14.17 of go-sqlite3.
