@@ -1,22 +1,83 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOTOOLCHAIN: local
 
 jobs:
-  build:
+  test:
+    name: test (${{ matrix.os }}, go ${{ matrix.go }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     strategy:
+      fail-fast: false
       matrix:
-        go-version: [1.15.x]
-        platform: [ubuntu-latest]
-    runs-on: ${{ matrix.platform }}
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go: ["1.21.x", "stable"]
     steps:
-    - name: Install Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: ${{ matrix.go-version }}
-    - name: Checkout code
-      uses: actions/checkout@v3
-    - name: Test
-      run: |
-        export PATH=$GOPATH/bin:$PATH
-        make test
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Build
+        run: go build -v ./...
+      - name: Test
+        run: go test -v ./...
+
+  build-tags:
+    name: tags (${{ matrix.group }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: query
+            tags: sqlite_fts5 sqlite_json1 sqlite_stat4 sqlite_column_metadata
+          - group: introspection
+            tags: sqlite_introspect sqlite_dbstat sqlite_percentile sqlite_math_functions
+          - group: hooks
+            tags: sqlite_vtable sqlite_preupdate_hook sqlite_unlock_notify sqlite_userauth
+          - group: behaviour
+            tags: sqlite_secure_delete sqlite_vacuum_incr sqlite_foreign_keys sqlite_allow_uri_authority
+          - group: misc
+            tags: sqlite_serialize sqlite_trace sqlite_os_trace sqlite_app_armor sqlite_omit_load_extension
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: Link with each tag
+        run: |
+          for tag in ${{ matrix.tags }}; do
+            echo "::group::$tag"
+            go test -c -o /dev/null -tags "$tag" . || exit 1
+            echo "::endgroup::"
+          done
+
+  check:
+    name: vet and tidy
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: go vet
+        run: go vet ./...
+      - name: go mod tidy is a no-op
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum

@@ -14,12 +14,9 @@
 */
 int register_hash(const struct ltc_hash_descriptor *hash)
 {
-   int x, blank = -1;
+   int x;
 
    LTC_ARGCHK(hash != NULL);
-
-   if (hash->name == NULL)
-      return -1;
 
    /* is it already registered? */
    LTC_MUTEX_LOCK(&ltc_hash_mutex);
@@ -28,17 +25,18 @@ int register_hash(const struct ltc_hash_descriptor *hash)
           LTC_MUTEX_UNLOCK(&ltc_hash_mutex);
           return x;
        }
-       if (hash_descriptor[x].name == NULL && blank == -1) {
-          blank = x;
-       }
    }
 
-   /* fill in blank spot */
-   if (blank != -1) {
-       XMEMCPY(&hash_descriptor[blank], hash, sizeof(struct ltc_hash_descriptor));
+   /* find a blank spot */
+   for (x = 0; x < TAB_SIZE; x++) {
+       if (hash_descriptor[x].name == NULL) {
+          XMEMCPY(&hash_descriptor[x], hash, sizeof(struct ltc_hash_descriptor));
+          LTC_MUTEX_UNLOCK(&ltc_hash_mutex);
+          return x;
+       }
    }
 
    /* no spot */
    LTC_MUTEX_UNLOCK(&ltc_hash_mutex);
-   return blank;
+   return -1;
 }

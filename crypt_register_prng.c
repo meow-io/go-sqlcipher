@@ -14,12 +14,9 @@
 */
 int register_prng(const struct ltc_prng_descriptor *prng)
 {
-   int x, blank = -1;
+   int x;
 
    LTC_ARGCHK(prng != NULL);
-
-   if (prng->name == NULL)
-      return -1;
 
    /* is it already registered? */
    LTC_MUTEX_LOCK(&ltc_prng_mutex);
@@ -28,17 +25,18 @@ int register_prng(const struct ltc_prng_descriptor *prng)
           LTC_MUTEX_UNLOCK(&ltc_prng_mutex);
           return x;
        }
-       if (prng_descriptor[x].name == NULL && blank == -1) {
-          blank = x;
-       }
    }
 
    /* find a blank spot */
-   if (blank != -1) {
-       XMEMCPY(&prng_descriptor[blank], prng, sizeof(struct ltc_prng_descriptor));
+   for (x = 0; x < TAB_SIZE; x++) {
+       if (prng_descriptor[x].name == NULL) {
+          XMEMCPY(&prng_descriptor[x], prng, sizeof(struct ltc_prng_descriptor));
+          LTC_MUTEX_UNLOCK(&ltc_prng_mutex);
+          return x;
+       }
    }
 
    /* no spot */
    LTC_MUTEX_UNLOCK(&ltc_prng_mutex);
-   return blank;
+   return -1;
 }
