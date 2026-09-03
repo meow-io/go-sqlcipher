@@ -31,6 +31,7 @@ LTC_EXPORT void LTC_CALL XFREE(void *p);
 
 LTC_EXPORT void LTC_CALL XQSORT(void *base, size_t nmemb, size_t size, int(*compar)(const void *, const void *));
 
+
 /* change the clock function too */
 LTC_EXPORT clock_t LTC_CALL XCLOCK(void);
 
@@ -44,19 +45,13 @@ LTC_EXPORT int   LTC_CALL XSTRCMP(const char *s1, const char *s2);
 #endif
 
 /* some compilers do not like "inline" (or maybe "static inline"), namely: HP cc, IBM xlc */
-#if !defined(LTC_NO_INLINE)
 #if defined(__GNUC__) || defined(__xlc__)
    #define LTC_INLINE __inline__
 #elif defined(_MSC_VER) || defined(__HP_cc)
    #define LTC_INLINE __inline
 #elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
    #define LTC_INLINE inline
-#endif
-#endif
-#if !defined(LTC_INLINE)
-   #if !defined(LTC_NO_INLINE)
-      #define LTC_NO_INLINE
-   #endif
+#else
    #define LTC_INLINE
 #endif
 
@@ -84,15 +79,15 @@ LTC_EXPORT int   LTC_CALL XSTRCMP(const char *s1, const char *s2);
  * The x86 platforms allow this but some others [ARM for instance] do not.  On those platforms you **MUST**
  * use the portable [slower] macros.
  */
-/* detect x86/i386/ARM 32bit */
-#if defined(__i386__) || defined(__i386) || defined(_M_IX86) || defined(_M_ARM)
+/* detect x86/i386 32bit */
+#if defined(__i386__) || defined(__i386) || defined(_M_IX86)
    #define ENDIAN_LITTLE
    #define ENDIAN_32BITWORD
    #define LTC_FAST
 #endif
 
-/* detect amd64/x64/arm64 */
-#if defined(__x86_64__) || defined(_M_X64) || defined(_M_AMD64) || defined(_M_ARM64)
+/* detect amd64/x64 */
+#if defined(__x86_64__) || defined(_M_X64) || defined(_M_AMD64)
    #define ENDIAN_LITTLE
    #define ENDIAN_64BITWORD
    #define LTC_FAST
@@ -180,11 +175,6 @@ LTC_EXPORT int   LTC_CALL XSTRCMP(const char *s1, const char *s2);
    #define LTC_FAST
 #endif
 
-/* Detect ILP32, commonly known as x32 on Linux and also possible on AIX */
-#if defined(_ILP32) || defined(__ILP32__)
-   #define ENDIAN_64BITWORD_ILP32
-#endif
-
 /* endianness fallback */
 #if !defined(ENDIAN_BIG) && !defined(ENDIAN_LITTLE)
   #if defined(_BYTE_ORDER) && _BYTE_ORDER == _BIG_ENDIAN || \
@@ -200,8 +190,7 @@ LTC_EXPORT int   LTC_CALL XSTRCMP(const char *s1, const char *s2);
       defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__ || \
       defined(__LITTLE_ENDIAN__) || \
       defined(__ARMEL__) || defined(__THUMBEL__) || defined(__AARCH64EL__) || \
-      defined(_MIPSEL) || defined(__MIPSEL) || defined(__MIPSEL__) || \
-      defined(_M_ARM) || defined(_M_ARM64)
+      defined(_MIPSEL) || defined(__MIPSEL) || defined(__MIPSEL__)
     #define ENDIAN_LITTLE
   #else
     #error Cannot detect endianness
@@ -214,7 +203,7 @@ LTC_EXPORT int   LTC_CALL XSTRCMP(const char *s1, const char *s2);
    typedef unsigned __int64 ulong64;
    typedef __int64 long64;
 #else
-   #define CONST64(n) n ## uLL
+   #define CONST64(n) n ## ULL
    typedef unsigned long long ulong64;
    typedef long long long64;
 #endif
@@ -225,7 +214,7 @@ LTC_EXPORT int   LTC_CALL XSTRCMP(const char *s1, const char *s2);
     defined(__s390x__) || defined(__arch64__) || defined(__aarch64__) || \
     defined(__sparcv9) || defined(__sparc_v9__) || defined(__sparc64__) || \
     defined(__ia64) || defined(__ia64__) || defined(__itanium__) || defined(_M_IA64) || \
-    defined(__LP64__) || defined(_LP64) || defined(__64BIT__) || defined(_M_ARM64)
+    defined(__LP64__) || defined(_LP64) || defined(__64BIT__)
    typedef unsigned ulong32;
    #if !defined(ENDIAN_64BITWORD) && !defined(ENDIAN_32BITWORD)
      #define ENDIAN_64BITWORD
@@ -249,24 +238,22 @@ typedef unsigned long ltc_mp_digit;
    #undef ENDIAN_32BITWORD
    #undef ENDIAN_64BITWORD
    #undef LTC_FAST
-   #define LTC_NO_ACCEL
    #define LTC_NO_BSWAP
-   #define LTC_NO_CLZL
-   #define LTC_NO_CTZL
    #define LTC_NO_ROLC
    #define LTC_NO_ROTATE
 #endif
 
-/* No LTC_FAST if explicitly disabled */
-#if defined(LTC_NO_FAST)
+/* No LTC_FAST if: explicitly disabled OR non-gcc/non-clang compiler OR old gcc OR using -ansi -std=c99 */
+#if defined(LTC_NO_FAST) || (__GNUC__ < 4) || defined(__STRICT_ANSI__)
    #undef LTC_FAST
 #endif
 
 #ifdef LTC_FAST
+   #define LTC_FAST_TYPE_PTR_CAST(x) ((LTC_FAST_TYPE*)(void*)(x))
    #ifdef ENDIAN_64BITWORD
-   typedef ulong64 LTC_FAST_TYPE;
+   typedef ulong64 __attribute__((__may_alias__)) LTC_FAST_TYPE;
    #else
-   typedef ulong32 LTC_FAST_TYPE;
+   typedef ulong32 __attribute__((__may_alias__)) LTC_FAST_TYPE;
    #endif
 #endif
 
@@ -302,94 +289,10 @@ typedef unsigned long ltc_mp_digit;
    #define LTC_HAVE_ROTATE_BUILTIN
 #endif
 
-#if !defined(LTC_NO_CLZL) && __has_builtin(__builtin_clzl)
-   #define LTC_HAVE_CLZL_BUILTIN
-#endif
-
-#if !defined(LTC_NO_CTZL) && __has_builtin(__builtin_ctzl)
-   #define LTC_HAVE_CTZL_BUILTIN
-#endif
-
-#if (defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86))
-   #define LTC_ARCH_X86
-#endif
-
-#if defined(__aarch64__) || defined(_M_ARM64)
-   #define LTC_ARCH_AARCH64
-#endif
-
-/* Just portable C implementations, LTC_NO_ACCEL disables all the CPU-specific ones at once */
-#ifndef LTC_NO_ACCEL
-
-#ifdef LTC_ARCH_X86
-   #if !defined(LTC_NO_AES_NI)
-      #define LTC_AES_NI
-   #endif
-   #if !defined(LTC_NO_GCM_PCLMUL)
-      #define LTC_GCM_PCLMUL
-      #undef LTC_GCM_TABLES
-   #endif
-   #if (defined __GNUC__ && (__GNUC__ * 100 + __GNUC_MINOR__ >= 409)) || \
-       (defined __clang__ && (__clang_major__ * 100 + __clang_minor__ >= 308)) || \
-       (defined _MSC_VER && defined _MSC_FULL_VER && (_MSC_VER) >= 1900)
-      #if !defined(LTC_NO_SHA1_X86)
-         #define LTC_SHA1_X86
-      #endif
-      #if !defined(LTC_NO_SHA224_X86)
-         #define LTC_SHA224_X86
-      #endif
-      #if !defined(LTC_NO_SHA256_X86)
-         #define LTC_SHA256_X86
-      #endif
-   #endif
-   /* the SHA512 extension intrinsics require GCC 14 resp. clang 17 */
-   #if (defined __GNUC__ && !defined __clang__ && (__GNUC__ >= 14)) || \
-       (defined __clang__ && (__clang_major__ >= 17)) || \
-       (defined _MSC_FULL_VER && (_MSC_FULL_VER) >=  194033813l) /* MSVC 2022 17.10 */
-      #if !defined(LTC_NO_SHA384_X86)
-         #define LTC_SHA384_X86
-      #endif
-      #if !defined(LTC_NO_SHA512_X86)
-         #define LTC_SHA512_X86
-      #endif
-      #if !defined(LTC_NO_SHA512_224_X86)
-         #define LTC_SHA512_224_X86
-      #endif
-      #if !defined(LTC_NO_SHA512_256_X86)
-         #define LTC_SHA512_256_X86
-      #endif
-   #endif
-#endif /* LTC_ARCH_X86 */
-
-#ifdef LTC_ARCH_AARCH64
-   #if !defined(LTC_NO_GCM_PMULL)
-      #define LTC_GCM_PMULL
-      #undef LTC_GCM_TABLES
-   #endif
-#endif /* LTC_ARCH_AARCH64 */
-
-#endif /* LTC_NO_ACCEL */
-
 #if defined(__GNUC__)
-   #define LTC_ALIGN_MSVC(n)
    #define LTC_ALIGN(n) __attribute__((aligned(n)))
-#elif defined(_MSC_VER)
-   #define LTC_ALIGN_MSVC(n) __declspec(align(n))
-   #define LTC_ALIGN(n)
 #else
-   #define LTC_ALIGN_MSVC(n)
    #define LTC_ALIGN(n)
-#endif
-
-/* Choose Windows Vista as minimum Version if we're compiling with at least VS2019
- * This is done in order to test the bcrypt RNG and can still be overridden by the user. */
-#if defined(_MSC_VER) && _MSC_VER >= 1920
-#   ifndef _WIN32_WINNT
-#      define _WIN32_WINNT 0x0600
-#   endif
-#   ifndef WINVER
-#      define WINVER 0x0600
-#   endif
 #endif
 
 /* Define `LTC_NO_NULL_TERMINATION_CHECK` in the user code
@@ -401,51 +304,20 @@ typedef unsigned long ltc_mp_digit;
 #   define LTC_NULL_TERMINATED
 #endif
 
-#ifndef LTC_DEPRECATED
 #if defined(__GNUC__) && (__GNUC__ * 100 + __GNUC_MINOR__ >= 405)
 #  define LTC_DEPRECATED(s) __attribute__((deprecated("replaced by " #s)))
+#  define PRIVATE_LTC_DEPRECATED_PRAGMA(s) _Pragma(#s)
+#  define LTC_DEPRECATED_PRAGMA(s) PRIVATE_LTC_DEPRECATED_PRAGMA(GCC warning s)
 #elif defined(__GNUC__) && (__GNUC__ * 100 + __GNUC_MINOR__ >= 301)
 #  define LTC_DEPRECATED(s) __attribute__((deprecated))
+#  define LTC_DEPRECATED_PRAGMA(s)
 #elif defined(_MSC_VER) && _MSC_VER >= 1500
    /* supported since Visual Studio 2008 */
 #  define LTC_DEPRECATED(s) __declspec(deprecated("replaced by " #s))
-#else
-#  define LTC_DEPRECATED(s)
-#endif
-#endif
-
-#ifndef LTC_DEPRECATED_PRAGMA
-#if defined(__GNUC__) && (__GNUC__ * 100 + __GNUC_MINOR__ >= 405)
-#  define PRIVATE_LTC_DEPRECATED_PRAGMA(s) _Pragma(#s)
-#  define LTC_DEPRECATED_PRAGMA(s) PRIVATE_LTC_DEPRECATED_PRAGMA(GCC warning s)
-#elif defined(_MSC_VER) && _MSC_VER >= 1500
-   /* supported since Visual Studio 2008 */
 #  define LTC_DEPRECATED_PRAGMA(s) __pragma(message(s))
 #else
+#  define LTC_DEPRECATED(s)
 #  define LTC_DEPRECATED_PRAGMA(s)
-#endif
-#endif
-
-#ifndef __has_attribute
-#  define __has_attribute(x) 0
-#endif
-#if defined(__GNUC__) || defined(__clang__)
-#  define LTC_ATTRIBUTE(x) __attribute__(x)
-#else
-#  define LTC_ATTRIBUTE(x)
-#endif
-
-#if __has_attribute(fallthrough)
-#  define LTC_FALLTHROUGH LTC_ATTRIBUTE((fallthrough))
-#endif
-#ifndef LTC_FALLTHROUGH
-#  define LTC_FALLTHROUGH
-#endif
-#if __has_attribute(target)
-#  define LTC_TARGET(x) LTC_ATTRIBUTE((target(x)))
-#endif
-#ifndef LTC_TARGET
-#  define LTC_TARGET(x)
 #endif
 
 #endif /* TOMCRYPT_CFG_H */

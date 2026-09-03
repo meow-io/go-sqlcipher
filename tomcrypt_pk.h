@@ -1,50 +1,7 @@
 /* LibTomCrypt, modular cryptographic library -- Tom St Denis */
 /* SPDX-License-Identifier: Unlicense */
 
-typedef struct password_ctx {
-   /**
-      Callback function that is called when a password is required.
-
-      Please be aware that the library takes ownership of the pointer that is
-      returned to the library via `str`.
-      The data will be zeroed and `free()`'d as soon as it isn't required anymore.
-      c.f. the documentation of the `free()` function pointer for details.
-
-      @param str        Pointer to pointer where the password will be stored.
-      @param len        Pointer to the length of the password.
-      @param userdata   `userdata` that was passed in the `password_ctx` struct.
-      @return CRYPT_OK on success
-   */
-   int (*callback)(void **str, unsigned long *len, void *userdata);
-   /**
-      Optional free function to free the allocated buffer.
-
-      At the point where the value returned by `callback()` is not required
-      anymore the library will free it by either calling this `free()` function
-      or `XFREE()` in case this `free()` function is set to `NULL`.
-
-      @param str        Pointer to the buffer to be free'd.
-   */
-   void (*free)(void *str);
-   /** Opaque `userdata` pointer passed when the callback is called */
-   void *userdata;
-} password_ctx;
-
 /* ---- NUMBER THEORY ---- */
-
-enum ltc_pka_id {
-   LTC_PKA_UNDEF = 0,
-   LTC_PKA_RSA,
-   LTC_PKA_DSA,
-   LTC_PKA_EC,
-   LTC_PKA_X25519,
-   LTC_PKA_ED25519,
-   LTC_PKA_DH,
-   LTC_PKA_RSA_PSS,
-   LTC_PKA_X448,
-   LTC_PKA_ED448,
-   LTC_PKA_NUM
-};
 
 enum public_key_type {
    /* Refers to the public key */
@@ -65,16 +22,7 @@ int rand_prime(void *N, long len, prng_state *prng, int wprng);
 /* ---- RSA ---- */
 #ifdef LTC_MRSA
 
-typedef struct ltc_rsa_parameters {
-   /** saltLength for PSS */
-   unsigned long saltlen;
-   /** Hash algorithm index for OAEP/PSS, -1 if unset */
-   int hash_idx;
-   /** MGF1 hash algorithm index, -1 if unset */
-   int mgf1_hash_idx;
-} ltc_rsa_parameters;
-
-/** RSA key */
+/** RSA PKCS style key */
 typedef struct Rsa_key {
     /** Type of key, PK_PRIVATE or PK_PUBLIC */
     int type;
@@ -94,10 +42,6 @@ typedef struct Rsa_key {
     void *dP;
     /** The d mod (q - 1) CRT param */
     void *dQ;
-    /** Key is constrained to PSS/OAEP operations */
-    int pss_oaep;
-    /** PSS/OAEP parameters of the RSA key */
-    ltc_rsa_parameters params;
 } rsa_key;
 
 int rsa_make_key(prng_state *prng, int wprng, int size, long e, rsa_key *key);
@@ -111,99 +55,23 @@ int rsa_exptmod(const unsigned char *in,   unsigned long inlen,
 
 void rsa_free(rsa_key *key);
 
-typedef struct ltc_rsa_op_parameters {
-   ltc_rsa_parameters params;
-   /* The padding type */
-   int padding;
-   /* The PRNG to use.
-    * Only required for signing and encryption. */
-   int wprng;
-   prng_state *prng;
-   /* Operation-specific parameters */
-   union {
-      struct {
-         const unsigned char *lparam;
-               unsigned long  lparamlen;
-      } crypt;
-      /* let's make space for potential future extensions */
-      ulong64 dummy[8];
-   } u;
-} ltc_rsa_op_parameters;
-
-int rsa_encrypt_key_v2(const unsigned char   *in,     unsigned long  inlen,
-                             unsigned char   *out,    unsigned long *outlen,
-                       ltc_rsa_op_parameters *params,
-                       const rsa_key         *key);
-
-int rsa_decrypt_key_v2(const unsigned char   *in,     unsigned long  inlen,
-                             unsigned char   *out,    unsigned long *outlen,
-                       ltc_rsa_op_parameters *params,
-                             int             *stat,
-                       const rsa_key         *key);
-
-int rsa_sign_hash_v2(const unsigned char   *hash,   unsigned long  hashlen,
-                           unsigned char   *sig,    unsigned long *siglen,
-                     ltc_rsa_op_parameters *params,
-                     const rsa_key         *key);
-
-int rsa_verify_hash_v2(const unsigned char   *sig,    unsigned long  siglen,
-                       const unsigned char   *hash,   unsigned long  hashlen,
-                       ltc_rsa_op_parameters *params,
-                             int             *stat,
-                       const rsa_key         *key);
-
 /* These use PKCS #1 v2.0 padding */
-#define ltc_rsa_encrypt_key(in, inlen, out, outlen, lp, lplen, prng_, prng_idx, hash_idx_, key) \
-      rsa_encrypt_key_v2(in, inlen, out, outlen, \
-                         &(ltc_rsa_op_parameters){ \
-                           .u.crypt.lparam = lp, \
-                           .u.crypt.lparamlen = lplen,\
-                           .prng = prng_, \
-                           .wprng = prng_idx, \
-                           .params.mgf1_hash_idx = hash_idx_, \
-                           .params.hash_idx = hash_idx_, \
-                           .padding = LTC_PKCS_1_OAEP, \
-                         }, key)
+#define rsa_encrypt_key(in, inlen, out, outlen, lparam, lparamlen, prng, prng_idx, hash_idx, key) \
+  rsa_encrypt_key_ex(in, inlen, out, outlen, lparam, lparamlen, prng, prng_idx, hash_idx, LTC_PKCS_1_OAEP, key)
 
-#define ltc_rsa_decrypt_key(in, inlen, out, outlen, lp, lplen, hash_idx_, stat, key) \
-      rsa_decrypt_key_v2(in, inlen, out, outlen, \
-                         &(ltc_rsa_op_parameters){ \
-                           .u.crypt.lparam = lp, \
-                           .u.crypt.lparamlen = lplen,\
-                           .params.mgf1_hash_idx = hash_idx_, \
-                           .params.hash_idx = hash_idx_, \
-                           .padding = LTC_PKCS_1_OAEP, \
-                         }, stat, key)
+#define rsa_decrypt_key(in, inlen, out, outlen, lparam, lparamlen, hash_idx, stat, key) \
+  rsa_decrypt_key_ex(in, inlen, out, outlen, lparam, lparamlen, hash_idx, LTC_PKCS_1_OAEP, stat, key)
 
-#define ltc_rsa_sign_hash(hash, hashlen, sig, siglen, prng_, prng_idx, hash_idx_, saltlen_, key) \
-      rsa_sign_hash_v2(hash, hashlen, sig, siglen, \
-                         &(ltc_rsa_op_parameters){ \
-                           .prng = prng_, \
-                           .wprng = prng_idx, \
-                           .params.mgf1_hash_idx = hash_idx_, \
-                           .params.hash_idx = hash_idx_, \
-                           .params.saltlen = saltlen_, \
-                           .padding = LTC_PKCS_1_PSS, \
-                         }, key)
+#define rsa_sign_hash(in, inlen, out, outlen, prng, prng_idx, hash_idx, saltlen, key) \
+  rsa_sign_hash_ex(in, inlen, out, outlen, LTC_PKCS_1_PSS, prng, prng_idx, hash_idx, saltlen, key)
 
-#define ltc_rsa_verify_hash(sig, siglen, hash, hashlen, hash_idx_, saltlen_, stat, key) \
-      rsa_verify_hash_v2(sig, siglen, hash, hashlen, \
-                         &(ltc_rsa_op_parameters){ \
-                           .params.mgf1_hash_idx = hash_idx_, \
-                           .params.hash_idx = hash_idx_, \
-                           .params.saltlen = saltlen_, \
-                           .padding = LTC_PKCS_1_PSS, \
-                         }, stat, key)
+#define rsa_verify_hash(sig, siglen, hash, hashlen, hash_idx, saltlen, stat, key) \
+  rsa_verify_hash_ex(sig, siglen, hash, hashlen, LTC_PKCS_1_PSS, hash_idx, saltlen, stat, key)
 
-/* If you used those in v1, they're still working */
-#define rsa_encrypt_key ltc_rsa_encrypt_key
-#define rsa_decrypt_key ltc_rsa_decrypt_key
-#define rsa_sign_hash   ltc_rsa_sign_hash
-#define rsa_verify_hash ltc_rsa_verify_hash
+#define rsa_sign_saltlen_get_max(hash_idx, key) \
+  rsa_sign_saltlen_get_max_ex(LTC_PKCS_1_PSS, hash_idx, key)
 
-#ifndef LTC_NO_DEPRECATED_APIS
 /* These can be switched between PKCS #1 v2.x and PKCS #1 v1.5 paddings */
-LTC_DEPRECATED(rsa_encrypt_key_v2)
 int rsa_encrypt_key_ex(const unsigned char *in,       unsigned long  inlen,
                              unsigned char *out,      unsigned long *outlen,
                        const unsigned char *lparam,   unsigned long  lparamlen,
@@ -211,31 +79,24 @@ int rsa_encrypt_key_ex(const unsigned char *in,       unsigned long  inlen,
                              int            hash_idx, int            padding,
                        const rsa_key       *key);
 
-LTC_DEPRECATED(rsa_decrypt_key_v2)
 int rsa_decrypt_key_ex(const unsigned char *in,             unsigned long  inlen,
                              unsigned char *out,            unsigned long *outlen,
                        const unsigned char *lparam,         unsigned long  lparamlen,
                              int            hash_idx,       int            padding,
                              int           *stat,     const rsa_key       *key);
 
-LTC_DEPRECATED(rsa_sign_hash_v2)
 int rsa_sign_hash_ex(const unsigned char *in,       unsigned long  inlen,
                            unsigned char *out,      unsigned long *outlen,
                            int            padding,
-                           prng_state    *prng,               int  prng_idx,
+                           prng_state    *prng,     int            prng_idx,
                            int            hash_idx, unsigned long  saltlen,
                      const rsa_key       *key);
 
-LTC_DEPRECATED(rsa_verify_hash_v2)
 int rsa_verify_hash_ex(const unsigned char *sig,            unsigned long  siglen,
                        const unsigned char *hash,           unsigned long  hashlen,
                              int            padding,
                              int            hash_idx,       unsigned long  saltlen,
                              int           *stat,     const rsa_key       *key);
-#endif /* LTC_NO_DEPRECATED_APIS */
-
-#define rsa_sign_saltlen_get_max(hash_idx, key) \
-  rsa_sign_saltlen_get_max_ex(LTC_PKCS_1_PSS, hash_idx, key)
 
 int rsa_sign_saltlen_get_max_ex(int padding, int hash_idx, const rsa_key *key);
 
@@ -245,7 +106,7 @@ int rsa_import(const unsigned char *in, unsigned long inlen, rsa_key *key);
 
 int rsa_import_x509(const unsigned char *in, unsigned long inlen, rsa_key *key);
 int rsa_import_pkcs8(const unsigned char *in, unsigned long inlen,
-                     const password_ctx  *pw_ctx, rsa_key *key);
+                     const void *passwd, unsigned long passwdlen, rsa_key *key);
 
 int rsa_set_key(const unsigned char *N,  unsigned long Nlen,
                 const unsigned char *e,  unsigned long elen,
@@ -275,8 +136,6 @@ int dh_get_groupsize(const dh_key *key);
 
 int dh_export(unsigned char *out, unsigned long *outlen, int type, const dh_key *key);
 int dh_import(const unsigned char *in, unsigned long inlen, dh_key *key);
-int dh_import_pkcs8(const unsigned char *in, unsigned long inlen,
-                    const password_ctx  *pw_ctx, dh_key *key);
 
 int dh_set_pg(const unsigned char *p, unsigned long plen,
               const unsigned char *g, unsigned long glen,
@@ -297,8 +156,13 @@ int dh_export_key(void *out, unsigned long *outlen, int type, const dh_key *key)
 
 
 /* ---- ECC Routines ---- */
+#ifdef LTC_MECC
 
-/* the curve type is required even without LTC_MECC, e.g. by the SSH PEM decoder */
+/* size of our temp buffers for exported keys */
+#define ECC_BUF_SIZE 256
+
+/* max private key size */
+#define ECC_MAXSIZE  66
 
 /** Structure defines a GF(p) curve */
 typedef struct {
@@ -326,14 +190,6 @@ typedef struct {
    /** The OID */
    const char *OID;
 } ltc_ecc_curve;
-
-#ifdef LTC_MECC
-
-/* size of our temp buffers for exported keys */
-#define ECC_BUF_SIZE 256
-
-/* max private key size */
-#define ECC_MAXSIZE  66
 
 /** A point on a ECC curve, stored in Jacbobian format such that (x,y,z) => (x/z^2, y/z^3, 1) when interpretted as affine */
 typedef struct {
@@ -384,7 +240,7 @@ typedef struct {
 } ecc_key;
 
 /** Formats of ECC signatures */
-typedef enum ecc_signature_type {
+typedef enum ecc_signature_type_ {
    /* ASN.1 encoded, ANSI X9.62 */
    LTC_ECCSIG_ANSIX962   = 0x0,
    /* raw R, S values */
@@ -394,29 +250,6 @@ typedef enum ecc_signature_type {
    /* SSH + ECDSA signature format defined by RFC5656 */
    LTC_ECCSIG_RFC5656    = 0x3,
 } ecc_signature_type;
-
-typedef struct ltc_ecc_sig_opts {
-   /** Signature type */
-   ecc_signature_type type;
-   /** The PRNG to use.
-    *  This must be set in case deterministic signature generation
-    *  according to RFC6979 is not enabled.
-    */
-   prng_state *prng;
-   int wprng;
-
-   /** Enable generation of a recovery ID.
-    *  This must be set in case one requires the recovery ID of a
-    *  signature operation.
-    */
-   unsigned char enable_recovery_id;
-   int recovery_id;
-
-   /** The hash algorithm to use when creating a signature.
-    *  Setting this will enable RFC6979 compatible signature generation.
-    */
-   const char *rfc6979_hash_alg;
-} ltc_ecc_sig_opts;
 
 /** the ECC params provided */
 extern const ltc_ecc_curve ltc_ecc_curves[];
@@ -435,40 +268,22 @@ int  ecc_make_key(prng_state *prng, int wprng, int keysize, ecc_key *key);
 int  ecc_make_key_ex(prng_state *prng, int wprng, ecc_key *key, const ltc_ecc_curve *cu);
 void ecc_free(ecc_key *key);
 
-#if defined(LTC_DER)
 int  ecc_export(unsigned char *out, unsigned long *outlen, int type, const ecc_key *key);
 int  ecc_import(const unsigned char *in, unsigned long inlen, ecc_key *key);
 int  ecc_import_ex(const unsigned char *in, unsigned long inlen, ecc_key *key, const ltc_ecc_curve *cu);
 
-int  ecc_export_openssl(unsigned char *out, unsigned long *outlen, int type, const ecc_key *key);
-int  ecc_import_openssl(const unsigned char *in, unsigned long inlen, ecc_key *key);
-int  ecc_import_pkcs8(const unsigned char *in, unsigned long inlen, const password_ctx *pw_ctx, ecc_key *key);
-int  ecc_import_x509(const unsigned char *in, unsigned long inlen, ecc_key *key);
-#endif
+int ecc_ansi_x963_export(const ecc_key *key, unsigned char *out, unsigned long *outlen);
+int ecc_ansi_x963_import(const unsigned char *in, unsigned long inlen, ecc_key *key);
+int ecc_ansi_x963_import_ex(const unsigned char *in, unsigned long inlen, ecc_key *key, const ltc_ecc_curve *cu);
 
-int  ecc_ansi_x963_export(const ecc_key *key, unsigned char *out, unsigned long *outlen);
-int  ecc_ansi_x963_import(const unsigned char *in, unsigned long inlen, ecc_key *key);
-int  ecc_ansi_x963_import_ex(const unsigned char *in, unsigned long inlen, ecc_key *key, const ltc_ecc_curve *cu);
+int ecc_export_openssl(unsigned char *out, unsigned long *outlen, int type, const ecc_key *key);
+int ecc_import_openssl(const unsigned char *in, unsigned long inlen, ecc_key *key);
+int ecc_import_pkcs8(const unsigned char *in, unsigned long inlen, const void *pwd, unsigned long pwdlen, ecc_key *key);
+int ecc_import_x509(const unsigned char *in, unsigned long inlen, ecc_key *key);
 
 int  ecc_shared_secret(const ecc_key *private_key, const ecc_key *public_key,
                        unsigned char *out, unsigned long *outlen);
 
-int ecc_sign_hash_v2(const unsigned char    *in,
-                           unsigned long     inlen,
-                           unsigned char    *out,
-                           unsigned long    *outlen,
-                           ltc_ecc_sig_opts *opts,
-                     const       ecc_key    *key);
-
-int ecc_verify_hash_v2(const unsigned char *sig,
-                             unsigned long  siglen,
-                       const unsigned char *hash,
-                             unsigned long  hashlen,
-                          ltc_ecc_sig_opts *opts,
-                                       int *stat,
-                       const       ecc_key *key);
-
-#if defined(LTC_DER)
 int  ecc_encrypt_key(const unsigned char *in,   unsigned long inlen,
                            unsigned char *out,  unsigned long *outlen,
                            prng_state *prng, int wprng, int hash,
@@ -477,83 +292,31 @@ int  ecc_encrypt_key(const unsigned char *in,   unsigned long inlen,
 int  ecc_decrypt_key(const unsigned char *in,  unsigned long  inlen,
                            unsigned char *out, unsigned long *outlen,
                            const ecc_key *key);
-#endif /* LTC_DER */
 
-#define ltc_ecc_sign_hash(i, il, o, ol, p, wp, k)         \
-      ecc_sign_hash_v2(i, il, o, ol,                      \
-                       &(ltc_ecc_sig_opts){               \
-                           .type = LTC_ECCSIG_ANSIX962,   \
-                           .prng = p,                     \
-                           .wprng = wp,                   \
-                        }, k)
-#define ltc_ecc_sign_hash_rfc7518(i, il, o, ol, p, wp, k)    \
-      ecc_sign_hash_v2(i, il, o, ol,                         \
-                       &(ltc_ecc_sig_opts){                  \
-                           .type = LTC_ECCSIG_RFC7518,       \
-                           .prng = p,                        \
-                           .wprng = wp,                      \
-                        }, k)
+#define ecc_sign_hash_rfc7518(in_, inlen_, out_, outlen_, prng_, wprng_, key_) \
+   ecc_sign_hash_ex(in_, inlen_, out_, outlen_, prng_, wprng_, LTC_ECCSIG_RFC7518, NULL, key_)
 
-#define ltc_ecc_verify_hash(s, sl, h, hl, st, k)          \
-      ecc_verify_hash_v2(s, sl, h, hl,                    \
-                         &(ltc_ecc_sig_opts){             \
-                             .type = LTC_ECCSIG_ANSIX962, \
-                          }, st, k)
-#define ltc_ecc_verify_hash_rfc7518(s, sl, h, hl, st, k)     \
-      ecc_verify_hash_v2(s, sl, h, hl,                       \
-                         &(ltc_ecc_sig_opts){                \
-                             .type = LTC_ECCSIG_RFC7518,     \
-                          }, st, k)
+#define ecc_sign_hash(in_, inlen_, out_, outlen_, prng_, wprng_, key_) \
+   ecc_sign_hash_ex(in_, inlen_, out_, outlen_, prng_, wprng_, LTC_ECCSIG_ANSIX962, NULL, key_)
 
-#ifdef LTC_NO_DEPRECATED_APIS
-#define ecc_sign_hash ltc_ecc_sign_hash
-#define ecc_verify_hash ltc_ecc_verify_hash
-#define ecc_sign_hash_rfc7518 ltc_ecc_sign_hash_rfc7518
-#define ecc_verify_hash_rfc7518 ltc_ecc_verify_hash_rfc7518
-#else /* LTC_NO_DEPRECATED_APIS */
-#if defined(LTC_DER)
-LTC_DEPRECATED(ecc_sign_hash_v2)
-int ecc_sign_hash(const unsigned char *in,
-                        unsigned long  inlen,
-                        unsigned char *out,
-                        unsigned long *outlen,
-                           prng_state *prng,
-                                  int  wprng,
-                  const       ecc_key *key);
+#define ecc_verify_hash_rfc7518(sig_, siglen_, hash_, hashlen_, stat_, key_) \
+   ecc_verify_hash_ex(sig_, siglen_, hash_, hashlen_, LTC_ECCSIG_RFC7518, stat_, key_)
 
-LTC_DEPRECATED(ecc_verify_hash_v2)
-int ecc_verify_hash(const unsigned char *sig,
-                          unsigned long  siglen,
-                    const unsigned char *hash,
-                          unsigned long  hashlen,
-                                    int *stat,
-                    const       ecc_key *key);
-#endif /* LTC_DER */
+#define ecc_verify_hash(sig_, siglen_, hash_, hashlen_, stat_, key_) \
+   ecc_verify_hash_ex(sig_, siglen_, hash_, hashlen_, LTC_ECCSIG_ANSIX962, stat_, key_)
 
-LTC_DEPRECATED(ecc_sign_hash_v2)
-int ecc_sign_hash_rfc7518(const unsigned char *in,
-                                unsigned long  inlen,
-                                unsigned char *out,
-                                unsigned long *outlen,
-                                   prng_state *prng,
-                                          int  wprng,
-                          const       ecc_key *key);
+int  ecc_sign_hash_ex(const unsigned char *in,  unsigned long inlen,
+                            unsigned char *out, unsigned long *outlen,
+                            prng_state *prng, int wprng, ecc_signature_type sigformat,
+                            int *recid, const ecc_key *key);
 
-LTC_DEPRECATED(ecc_verify_hash_v2)
-int ecc_verify_hash_rfc7518(const unsigned char *sig,
-                                  unsigned long  siglen,
-                            const unsigned char *hash,
-                                  unsigned long  hashlen,
-                                            int *stat,
-                            const       ecc_key *key);
-#endif /* LTC_NO_DEPRECATED_APIS */
+int  ecc_verify_hash_ex(const unsigned char *sig,  unsigned long siglen,
+                        const unsigned char *hash, unsigned long hashlen,
+                        ecc_signature_type sigformat, int *stat, const ecc_key *key);
 
-int  ecc_recover_key(const unsigned char *sig,
-                           unsigned long  siglen,
-                     const unsigned char *hash,
-                           unsigned long  hashlen,
-                        ltc_ecc_sig_opts *opts,
-                                 ecc_key *key);
+int  ecc_recover_key(const unsigned char *sig,  unsigned long siglen,
+                     const unsigned char *hash, unsigned long hashlen,
+                     int recid, ecc_signature_type sigformat, ecc_key *key);
 
 #endif
 
@@ -563,8 +326,12 @@ typedef struct {
    /** The key type, PK_PRIVATE or PK_PUBLIC */
    enum public_key_type type;
 
-   /** The PK-algorithm, LTC_PKA_ED25519 or LTC_PKA_X25519 */
-   enum ltc_pka_id pka;
+   /** The PK-algorithm, PKA_ED25519 or PKA_X25519 */
+   /** This was supposed to be:
+    * enum public_key_algorithms algo;
+    * but that enum is now in tomcrypt_private.h
+    */
+   int algo;
 
    /** The private key */
    unsigned char priv[32];
@@ -584,9 +351,9 @@ int ed25519_export(       unsigned char *out, unsigned long *outlen,
 int ed25519_import(const unsigned char *in, unsigned long inlen, curve25519_key *key);
 int ed25519_import_raw(const unsigned char *in, unsigned long inlen, int which, curve25519_key *key);
 int ed25519_import_x509(const unsigned char *in, unsigned long inlen, curve25519_key *key);
-int ed25519_import_pkcs8(const unsigned char  *in, unsigned long inlen,
-                         const password_ctx   *pw_ctx,
-                               curve25519_key *key);
+int ed25519_import_pkcs8(const unsigned char *in, unsigned long inlen,
+                                  const void *pwd, unsigned long pwdlen,
+                              curve25519_key *key);
 
 int ed25519_sign(const  unsigned char *msg, unsigned long msglen,
                         unsigned char *sig, unsigned long *siglen,
@@ -624,89 +391,15 @@ int x25519_export(       unsigned char *out, unsigned long *outlen,
 int x25519_import(const unsigned char *in, unsigned long inlen, curve25519_key *key);
 int x25519_import_raw(const unsigned char *in, unsigned long inlen, int which, curve25519_key *key);
 int x25519_import_x509(const unsigned char *in, unsigned long inlen, curve25519_key *key);
-int x25519_import_pkcs8(const unsigned char  *in, unsigned long inlen,
-                        const password_ctx   *pw_ctx,
-                              curve25519_key *key);
+int x25519_import_pkcs8(const unsigned char *in, unsigned long inlen,
+                                 const void *pwd, unsigned long pwdlen,
+                             curve25519_key *key);
 
 int x25519_shared_secret(const curve25519_key *private_key,
                          const curve25519_key *public_key,
                                 unsigned char *out, unsigned long *outlen);
 
 #endif /* LTC_CURVE25519 */
-
-
-#ifdef LTC_CURVE448
-
-typedef struct {
-    /** Type of key, PK_PRIVATE or PK_PUBLIC */
-    enum public_key_type type;
-    /** Algorithm: LTC_PKA_X448 or LTC_PKA_ED448 */
-    enum ltc_pka_id pka;
-    /** The private key (56 bytes for X448, 57 bytes for Ed448) */
-    unsigned char priv[57];
-    /** The public key (56 bytes for X448, 57 bytes for Ed448) */
-    unsigned char pub[57];
-} curve448_key;
-
-/** X448 Diffie-Hellman key exchange */
-int x448_make_key(prng_state *prng, int wprng, curve448_key *key);
-
-int x448_export(       unsigned char *out, unsigned long *outlen,
-                                 int  which,
-                const curve448_key *key);
-
-int x448_import(const unsigned char *in, unsigned long inlen, curve448_key *key);
-int x448_import_raw(const unsigned char *in, unsigned long inlen, int which, curve448_key *key);
-int x448_import_x509(const unsigned char *in, unsigned long inlen, curve448_key *key);
-int x448_import_pkcs8(const unsigned char  *in, unsigned long inlen,
-                      const password_ctx   *pw_ctx,
-                            curve448_key *key);
-
-int x448_shared_secret(const curve448_key *private_key,
-                       const curve448_key *public_key,
-                             unsigned char *out, unsigned long *outlen);
-
-/** Ed448 Signature API */
-int ed448_make_key(prng_state *prng, int wprng, curve448_key *key);
-
-int ed448_export(       unsigned char *out, unsigned long *outlen,
-                                  int  which,
-                 const curve448_key *key);
-
-int ed448_import(const unsigned char *in, unsigned long inlen, curve448_key *key);
-int ed448_import_raw(const unsigned char *in, unsigned long inlen, int which, curve448_key *key);
-int ed448_import_x509(const unsigned char *in, unsigned long inlen, curve448_key *key);
-int ed448_import_pkcs8(const unsigned char  *in, unsigned long inlen,
-                       const password_ctx   *pw_ctx,
-                             curve448_key *key);
-
-int ed448_sign(const  unsigned char *msg, unsigned long msglen,
-                      unsigned char *sig, unsigned long *siglen,
-               const curve448_key *private_key);
-int ed448ctx_sign(const  unsigned char *msg, unsigned long  msglen,
-                         unsigned char *sig, unsigned long *siglen,
-                  const  unsigned char *ctx, unsigned long  ctxlen,
-                  const curve448_key *private_key);
-int ed448ph_sign(const  unsigned char *msg, unsigned long  msglen,
-                        unsigned char *sig, unsigned long *siglen,
-                 const  unsigned char *ctx, unsigned long  ctxlen,
-                 const curve448_key *private_key);
-int ed448_verify(const  unsigned char *msg, unsigned long msglen,
-                 const  unsigned char *sig, unsigned long siglen,
-                                  int *stat,
-                 const curve448_key *public_key);
-int ed448ctx_verify(const  unsigned char *msg, unsigned long msglen,
-                    const  unsigned char *sig, unsigned long siglen,
-                    const  unsigned char *ctx, unsigned long ctxlen,
-                                     int *stat,
-                    const curve448_key *public_key);
-int ed448ph_verify(const  unsigned char *msg, unsigned long msglen,
-                   const  unsigned char *sig, unsigned long siglen,
-                   const  unsigned char *ctx, unsigned long ctxlen,
-                                    int *stat,
-                   const curve448_key *public_key);
-
-#endif /* LTC_CURVE448 */
 
 #ifdef LTC_MDSA
 
@@ -783,49 +476,12 @@ int dsa_decrypt_key(const unsigned char *in,  unsigned long  inlen,
                     const dsa_key       *key);
 
 int dsa_import(const unsigned char *in, unsigned long inlen, dsa_key *key);
-int dsa_import_pkcs8(const unsigned char *in, unsigned long inlen,
-                     const password_ctx  *pw_ctx,
-                     dsa_key *key);
 int dsa_export(unsigned char *out, unsigned long *outlen, int type, const dsa_key *key);
 int dsa_verify_key(const dsa_key *key, int *stat);
 int dsa_shared_secret(void          *private_key, void *base,
                       const dsa_key *public_key,
                       unsigned char *out,         unsigned long *outlen);
 #endif /* LTC_MDSA */
-
-/*
- * LibTomCrypt tagged-union for holding a Public Key
- */
-
-typedef struct {
-   union {
-#ifdef LTC_CURVE25519
-      curve25519_key x25519;
-      curve25519_key ed25519;
-#endif
-#ifdef LTC_CURVE448
-      curve448_key x448;
-      curve448_key ed448;
-#endif
-#ifdef LTC_MDH
-      dh_key dh;
-#endif
-#ifdef LTC_MDSA
-      dsa_key dsa;
-#endif
-#ifdef LTC_MECC
-      ecc_key ecc;
-#endif
-#ifdef LTC_MRSA
-      rsa_key rsa;
-#endif
-      char dummy;
-   } u;
-   enum ltc_pka_id id;
-} ltc_pka_key;
-
-void pka_key_free(ltc_pka_key *key);
-void pka_key_destroy(ltc_pka_key **key);
 
 #ifdef LTC_DER
 /* DER handling */
@@ -892,44 +548,43 @@ typedef struct ltc_asn1_list_ {
    struct ltc_asn1_list_ *prev, *next, *child, *parent;
 } ltc_asn1_list;
 
-#define LTC_SET_ASN1(list, index, Type, Data, Size)               \
+#define LTC_SET_ASN1(list, index, Type, Data, Size)  \
+   do {                                              \
+      int LTC_MACRO_temp            = (index);       \
+      ltc_asn1_list *LTC_MACRO_list = (list);        \
+      LTC_MACRO_list[LTC_MACRO_temp].type = (Type);  \
+      LTC_MACRO_list[LTC_MACRO_temp].data = (void*)(Data);  \
+      LTC_MACRO_list[LTC_MACRO_temp].size = (Size);  \
+      LTC_MACRO_list[LTC_MACRO_temp].used = 0;       \
+      LTC_MACRO_list[LTC_MACRO_temp].optional = 0;   \
+      LTC_MACRO_list[LTC_MACRO_temp].klass = 0;      \
+      LTC_MACRO_list[LTC_MACRO_temp].pc = 0;         \
+      LTC_MACRO_list[LTC_MACRO_temp].tag = 0;        \
+   } while (0)
+
+#define LTC_SET_ASN1_IDENTIFIER(list, index, Class, Pc, Tag)      \
    do {                                                           \
-      int LTC_TMPVAR(SA)            = (index);                    \
-      ltc_asn1_list *LTC_TMPVAR(SA_list) = (list);                \
-      LTC_TMPVAR(SA_list)[LTC_TMPVAR(SA)].type = (Type);          \
-      LTC_TMPVAR(SA_list)[LTC_TMPVAR(SA)].data = (void*)(Data);   \
-      LTC_TMPVAR(SA_list)[LTC_TMPVAR(SA)].size = (Size);          \
-      LTC_TMPVAR(SA_list)[LTC_TMPVAR(SA)].used = 0;               \
-      LTC_TMPVAR(SA_list)[LTC_TMPVAR(SA)].optional = 0;           \
-      LTC_TMPVAR(SA_list)[LTC_TMPVAR(SA)].klass = 0;              \
-      LTC_TMPVAR(SA_list)[LTC_TMPVAR(SA)].pc = 0;                 \
-      LTC_TMPVAR(SA_list)[LTC_TMPVAR(SA)].tag = 0;                \
+      int LTC_MACRO_temp            = (index);                    \
+      ltc_asn1_list *LTC_MACRO_list = (list);                     \
+      LTC_MACRO_list[LTC_MACRO_temp].type = LTC_ASN1_CUSTOM_TYPE; \
+      LTC_MACRO_list[LTC_MACRO_temp].klass = (Class);             \
+      LTC_MACRO_list[LTC_MACRO_temp].pc = (Pc);                   \
+      LTC_MACRO_list[LTC_MACRO_temp].tag = (Tag);                 \
    } while (0)
 
-#define LTC_SET_ASN1_IDENTIFIER(list, index, Class, Pc, Tag)               \
-   do {                                                                    \
-      int LTC_TMPVAR(SAI)       = (index);                                 \
-      ltc_asn1_list *LTC_TMPVAR(SAI_list) = (list);                        \
-      LTC_TMPVAR(SAI_list)[LTC_TMPVAR(SAI)].type = LTC_ASN1_CUSTOM_TYPE;   \
-      LTC_TMPVAR(SAI_list)[LTC_TMPVAR(SAI)].klass = (Class);               \
-      LTC_TMPVAR(SAI_list)[LTC_TMPVAR(SAI)].pc = (Pc);                     \
-      LTC_TMPVAR(SAI_list)[LTC_TMPVAR(SAI)].tag = (Tag);                   \
+#define LTC_SET_ASN1_CUSTOM_CONSTRUCTED(list, index, Class, Tag, Data)    \
+   do {                                                           \
+      int LTC_MACRO_temp##__LINE__ = (index);                     \
+      LTC_SET_ASN1(list, LTC_MACRO_temp##__LINE__, LTC_ASN1_CUSTOM_TYPE, Data, 1);   \
+      LTC_SET_ASN1_IDENTIFIER(list, LTC_MACRO_temp##__LINE__, Class, LTC_ASN1_PC_CONSTRUCTED, Tag);       \
    } while (0)
 
-#define LTC_SET_ASN1_CUSTOM_CONSTRUCTED(list, index, Class, Tag, Data)                       \
-   do {                                                                                      \
-      int LTC_TMPVAR(SACC) = (index);                                                        \
-      LTC_SET_ASN1(list, LTC_TMPVAR(SACC), LTC_ASN1_CUSTOM_TYPE, Data, 1);                   \
-      LTC_SET_ASN1_IDENTIFIER(list, LTC_TMPVAR(SACC), Class, LTC_ASN1_PC_CONSTRUCTED, Tag);  \
-   } while (0)
-
-#define LTC_SET_ASN1_CUSTOM_PRIMITIVE(list, index, Class, Tag, Type, Data, Size)          \
-   do {                                                                                   \
-      int LTC_TMPVAR(SACP) = (index);                                                     \
-      ltc_asn1_list *LTC_TMPVAR(SACP_list) = (list);                        \
-      LTC_SET_ASN1(list, LTC_TMPVAR(SACP), LTC_ASN1_CUSTOM_TYPE, Data, Size);             \
-      LTC_SET_ASN1_IDENTIFIER(list, LTC_TMPVAR(SACP), Class, LTC_ASN1_PC_PRIMITIVE, Tag); \
-      LTC_TMPVAR(SACP_list)[LTC_TMPVAR(SACP)].used = (int)(Type);                                          \
+#define LTC_SET_ASN1_CUSTOM_PRIMITIVE(list, index, Class, Tag, Type, Data, Size)    \
+   do {                                                           \
+      int LTC_MACRO_temp##__LINE__ = (index);                     \
+      LTC_SET_ASN1(list, LTC_MACRO_temp##__LINE__, LTC_ASN1_CUSTOM_TYPE, Data, Size);   \
+      LTC_SET_ASN1_IDENTIFIER(list, LTC_MACRO_temp##__LINE__, Class, LTC_ASN1_PC_PRIMITIVE, Tag);       \
+      list[LTC_MACRO_temp##__LINE__].used = (int)(Type);       \
    } while (0)
 
 extern const char*          der_asn1_class_to_string_map[];
@@ -963,17 +618,9 @@ enum ltc_der_seq {
    LTC_DER_SEQ_RELAXED = LTC_DER_SEQ_ZERO,
    LTC_DER_SEQ_STRICT = 0x2u,
 
-   /** Bit2  - [0]=Relaxed Length Check
-    *          [1]=Strict Length Check */
-   LTC_DER_SEQ_LEN_RELAXED = LTC_DER_SEQ_ZERO,
-   LTC_DER_SEQ_LEN_STRICT = 0x4u,
-
    /** Alternative naming */
    LTC_DER_SEQ_SET = LTC_DER_SEQ_UNORDERED,
    LTC_DER_SEQ_SEQUENCE = LTC_DER_SEQ_ORDERED,
-
-   LTC_DER_SEQ_ALL_STRICT = LTC_DER_SEQ_STRICT | LTC_DER_SEQ_LEN_STRICT,
-
 };
 
 int der_decode_sequence_ex(const unsigned char *in, unsigned long  inlen,
@@ -1056,6 +703,7 @@ int der_encode_object_identifier(const unsigned long *words, unsigned long  nwor
 int der_decode_object_identifier(const unsigned char *in,    unsigned long  inlen,
                                        unsigned long *words, unsigned long *outlen);
 int der_length_object_identifier(const unsigned long *words, unsigned long nwords, unsigned long *outlen);
+unsigned long der_object_identifier_bits(unsigned long x);
 
 /* IA5 STRING */
 int der_encode_ia5_string(const unsigned char *in, unsigned long inlen,
@@ -1063,6 +711,9 @@ int der_encode_ia5_string(const unsigned char *in, unsigned long inlen,
 int der_decode_ia5_string(const unsigned char *in, unsigned long inlen,
                                 unsigned char *out, unsigned long *outlen);
 int der_length_ia5_string(const unsigned char *octets, unsigned long noctets, unsigned long *outlen);
+
+int der_ia5_char_encode(int c);
+int der_ia5_value_decode(int v);
 
 /* TELETEX STRING */
 int der_decode_teletex_string(const unsigned char *in, unsigned long inlen,
@@ -1075,6 +726,9 @@ int der_encode_printable_string(const unsigned char *in, unsigned long inlen,
 int der_decode_printable_string(const unsigned char *in, unsigned long inlen,
                                 unsigned char *out, unsigned long *outlen);
 int der_length_printable_string(const unsigned char *octets, unsigned long noctets, unsigned long *outlen);
+
+int der_printable_char_encode(int c);
+int der_printable_value_decode(int v);
 
 /* UTF-8 */
 #if (defined(SIZE_MAX) || __STDC_VERSION__ >= 199901L || defined(WCHAR_MAX) || defined(__WCHAR_MAX__) || defined(_WCHAR_T) || defined(_WCHAR_T_DEFINED) || defined (__WCHAR_TYPE__)) && !defined(LTC_NO_WCHAR)
@@ -1095,6 +749,7 @@ int der_encode_utf8_string(const wchar_t *in,  unsigned long inlen,
 
 int der_decode_utf8_string(const unsigned char *in,  unsigned long inlen,
                                        wchar_t *out, unsigned long *outlen);
+unsigned long der_utf8_charsize(const wchar_t c);
 int der_length_utf8_string(const wchar_t *in, unsigned long noctets, unsigned long *outlen);
 
 
