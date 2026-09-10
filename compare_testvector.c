@@ -54,13 +54,11 @@ static void s_print_hex(const char* what, const void* v, const unsigned long l)
   @param which          The iteration count
   @return 0 on equality, -1 or 1 on difference
 */
-int ltc_compare_testvector(const void* is, const unsigned long is_len, const void* should, const unsigned long should_len, const char* what, int which)
+int compare_testvector(const void* is, const unsigned long is_len, const void* should, const unsigned long should_len, const char* what, int which)
 {
    int res = 0;
    if(is_len != should_len) {
       res = is_len > should_len ? -1 : 1;
-   } else if (is_len == 0 && (!is || !should)) {
-      res = 0;
    } else {
       res = XMEMCMP(is, should, is_len);
    }
@@ -80,13 +78,4 @@ int ltc_compare_testvector(const void* is, const unsigned long is_len, const voi
 #endif
 
    return res;
-}
-
-int ltc_do_compare_testvector(const void* is, const unsigned long is_len, const void* should, const unsigned long should_len, const char* what, int which)
-{
-   if (ltc_compare_testvector(is, is_len, should, should_len, what, which) == 0) {
-      return CRYPT_OK;
-   } else {
-      return CRYPT_FAIL_TESTVECTOR;
-   }
 }

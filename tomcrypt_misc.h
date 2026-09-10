@@ -53,32 +53,6 @@ int base16_decode(const          char *in,  unsigned long  inlen,
                         unsigned char *out, unsigned long *outlen);
 #endif
 
-/* ---- Argon2 password hashing function (RFC 9106) ---- */
-#ifdef LTC_ARGON2
-typedef enum argon2_type {
-   ARGON2_D  = 0,
-   ARGON2_I  = 1,
-   ARGON2_ID = 2
-} argon2_type;
-
-int argon2_hash(const unsigned char *pwd,  unsigned long pwdlen,
-                const unsigned char *salt, unsigned long saltlen,
-                const unsigned char *secret, unsigned long secretlen,
-                const unsigned char *ad, unsigned long adlen,
-                unsigned int t_cost, unsigned int m_cost,
-                unsigned int parallelism,
-                argon2_type type,
-                unsigned char *out, unsigned long outlen);
-#endif /* LTC_ARGON2 */
-
-/* ---- scrypt password-based KDF (RFC 7914) ---- */
-#ifdef LTC_SCRYPT
-int scrypt_pbkdf(const unsigned char *password, unsigned long password_len,
-                 const unsigned char *salt,     unsigned long salt_len,
-                 unsigned long N, unsigned long r, unsigned long p,
-                 unsigned char *out, unsigned long outlen);
-#endif /* LTC_SCRYPT */
-
 #ifdef LTC_BCRYPT
 int bcrypt_pbkdf_openbsd(const          void *secret, unsigned long secret_len,
                          const unsigned char *salt,   unsigned long salt_len,
@@ -128,6 +102,15 @@ int crypt_list_all_constants(char *names_list, unsigned int *names_list_size);
 int crypt_get_size(const char* namein, unsigned int *sizeout);
 int crypt_list_all_sizes(char *names_list, unsigned int *names_list_size);
 
+#ifdef LTM_DESC
+LTC_DEPRECATED(crypt_mp_init) void init_LTM(void);
+#endif
+#ifdef TFM_DESC
+LTC_DEPRECATED(crypt_mp_init) void init_TFM(void);
+#endif
+#ifdef GMP_DESC
+LTC_DEPRECATED(crypt_mp_init) void init_GMP(void);
+#endif
 int crypt_mp_init(const char* mpi);
 
 #ifdef LTC_ADLER32
@@ -176,40 +159,6 @@ int padding_pad(unsigned char *data, unsigned long length, unsigned long* padded
 int padding_depad(const unsigned char *data, unsigned long *length, unsigned long mode);
 #endif  /* LTC_PADDING */
 
-#ifdef LTC_PEM
-/* Buffer-based API */
-int pem_decode(const void *buf, unsigned long len, ltc_pka_key *k, const password_ctx *pw_ctx);
-int pem_decode_pkcs(const void *buf, unsigned long len, ltc_pka_key *k, const password_ctx *pw_ctx);
-
-#ifdef LTC_SSH
-/**
-   Callback function for each key in an `authorized_keys` file.
-
-   This function takes ownership of the `k` parameter passed.
-   `k` must be free'd by calling `pka_key_destroy(&k)`.
-
-   @param k        Pointer to the PKA key.
-   @param comment  Pointer to a string with the comment.
-   @param ctx      The `ctx` pointer as passed to the read function.
-*/
-typedef int (*ssh_authorized_key_cb)(ltc_pka_key *k, const char *comment, void *ctx);
-
-int pem_decode_openssh(const void *buf, unsigned long len, ltc_pka_key *k, const password_ctx *pw_ctx);
-int ssh_read_authorized_keys(const void *buf, unsigned long len, ssh_authorized_key_cb cb, void *ctx);
-#endif /* LTC_SSH */
-
-/* FILE*-based API */
-#ifndef LTC_NO_FILE
-int pem_decode_filehandle(FILE *f, ltc_pka_key *k, const password_ctx *pw_ctx);
-int pem_decode_pkcs_filehandle(FILE *f, ltc_pka_key *k, const password_ctx *pw_ctx);
-#ifdef LTC_SSH
-int pem_decode_openssh_filehandle(FILE *f, ltc_pka_key *k, const password_ctx *pw_ctx);
-int ssh_read_authorized_keys_filehandle(FILE *f, ssh_authorized_key_cb cb, void *ctx);
-#endif /* LTC_SSH */
-#endif /* LTC_NO_FILE */
-
-#endif /* LTC_PEM */
-
 #ifdef LTC_SSH
 typedef enum ssh_data_type_ {
    LTC_SSHDATA_EOL,
@@ -227,5 +176,4 @@ int ssh_encode_sequence_multi(unsigned char *out, unsigned long *outlen, ...) LT
 int ssh_decode_sequence_multi(const unsigned char *in, unsigned long *inlen, ...) LTC_NULL_TERMINATED;
 #endif /* LTC_SSH */
 
-LTC_DEPRECATED(nothing. API will be internal)
 int compare_testvector(const void* is, const unsigned long is_len, const void* should, const unsigned long should_len, const char* what, int which);

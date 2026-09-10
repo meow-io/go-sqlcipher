@@ -1,11 +1,6 @@
 /* LibTomCrypt, modular cryptographic library -- Tom St Denis */
 /* SPDX-License-Identifier: Unlicense */
 
-
-#define LTC_TMPVAR__(n, l) n ## l
-#define LTC_TMPVAR_(n, l) LTC_TMPVAR__(n, l)
-#define LTC_TMPVAR(n) LTC_TMPVAR_(LTC_ ## n ## _, __LINE__)
-
 /* ---- HELPER MACROS ---- */
 #ifdef ENDIAN_NEUTRAL
 
@@ -59,8 +54,8 @@ do { x = (((ulong64)((y)[0] & 255))<<56)|(((ulong64)((y)[1] & 255))<<48) | \
 #ifdef LTC_HAVE_BSWAP_BUILTIN
 
 #define STORE32H(x, y)                          \
-do { ulong32 LTC_TMPVAR(ttt) = __builtin_bswap32 ((x));     \
-      XMEMCPY ((y), &LTC_TMPVAR(ttt), 4); } while(0)
+do { ulong32 ttt = __builtin_bswap32 ((x));     \
+      XMEMCPY ((y), &ttt, 4); } while(0)
 
 #define LOAD32H(x, y)                           \
 do { XMEMCPY (&(x), (y), 4);                    \
@@ -69,14 +64,14 @@ do { XMEMCPY (&(x), (y), 4);                    \
 #elif !defined(LTC_NO_BSWAP) && (defined(INTEL_CC) || (defined(__GNUC__) && (defined(__DJGPP__) || defined(__CYGWIN__) || defined(__MINGW32__) || defined(__i386__) || defined(__x86_64__))))
 
 #define STORE32H(x, y)           \
-__asm__ volatile (               \
+asm __volatile__ (               \
    "bswapl %0     \n\t"          \
    "movl   %0,(%1)\n\t"          \
    "bswapl %0     \n\t"          \
       ::"r"(x), "r"(y): "memory");
 
 #define LOAD32H(x, y)          \
-__asm__ volatile (             \
+asm __volatile__ (             \
    "movl (%1),%0\n\t"          \
    "bswapl %0\n\t"             \
    :"=r"(x): "r"(y): "memory");
@@ -98,8 +93,8 @@ __asm__ volatile (             \
 #ifdef LTC_HAVE_BSWAP_BUILTIN
 
 #define STORE64H(x, y)                          \
-do { ulong64 LTC_TMPVAR(ttt) = __builtin_bswap64 ((x));     \
-      XMEMCPY ((y), &LTC_TMPVAR(ttt), 8); } while(0)
+do { ulong64 ttt = __builtin_bswap64 ((x));     \
+      XMEMCPY ((y), &ttt, 8); } while(0)
 
 #define LOAD64H(x, y)                           \
 do { XMEMCPY (&(x), (y), 8);                    \
@@ -109,14 +104,14 @@ do { XMEMCPY (&(x), (y), 8);                    \
 #elif !defined(LTC_NO_BSWAP) && (defined(__GNUC__) && defined(__x86_64__))
 
 #define STORE64H(x, y)           \
-__asm__ volatile (               \
+asm __volatile__ (               \
    "bswapq %0     \n\t"          \
    "movq   %0,(%1)\n\t"          \
    "bswapq %0     \n\t"          \
    ::"r"(x), "r"(y): "memory");
 
 #define LOAD64H(x, y)          \
-__asm__ volatile (             \
+asm __volatile__ (             \
    "movq (%1),%0\n\t"          \
    "bswapq %0\n\t"             \
    :"=r"(x): "r"(y): "memory");
@@ -140,7 +135,7 @@ do { x = (((ulong64)((y)[0] & 255))<<56)|(((ulong64)((y)[1] & 255))<<48) | \
 #ifdef ENDIAN_32BITWORD
 
 #define STORE32L(x, y)        \
-  do { ulong32  LTC_TMPVAR(ttt) = (x); XMEMCPY(y, &LTC_TMPVAR(ttt), 4); } while(0)
+  do { ulong32  ttt = (x); XMEMCPY(y, &ttt, 4); } while(0)
 
 #define LOAD32L(x, y)         \
   do { XMEMCPY(&(x), y, 4); } while(0)
@@ -160,13 +155,13 @@ do { x = (((ulong64)((y)[0] & 255))<<56)|(((ulong64)((y)[1] & 255))<<48) | \
 #else /* 64-bit words then  */
 
 #define STORE32L(x, y)        \
-  do { ulong32 LTC_TMPVAR(ttt) = (x); XMEMCPY(y, &LTC_TMPVAR(ttt), 4); } while(0)
+  do { ulong32 ttt = (x); XMEMCPY(y, &ttt, 4); } while(0)
 
 #define LOAD32L(x, y)         \
   do { XMEMCPY(&(x), y, 4); x &= 0xFFFFFFFF; } while(0)
 
 #define STORE64L(x, y)        \
-  do { ulong64 LTC_TMPVAR(ttt) = (x); XMEMCPY(y, &LTC_TMPVAR(ttt), 8); } while(0)
+  do { ulong64 ttt = (x); XMEMCPY(y, &ttt, 8); } while(0)
 
 #define LOAD64L(x, y)         \
   do { XMEMCPY(&(x), y, 8); } while(0)
@@ -200,7 +195,7 @@ do { x = (((ulong64)((y)[7] & 255))<<56)|(((ulong64)((y)[6] & 255))<<48) | \
 #ifdef ENDIAN_32BITWORD
 
 #define STORE32H(x, y)        \
-  do { ulong32 LTC_TMPVAR(ttt) = (x); XMEMCPY(y, &LTC_TMPVAR(ttt), 4); } while(0)
+  do { ulong32 ttt = (x); XMEMCPY(y, &ttt, 4); } while(0)
 
 #define LOAD32H(x, y)         \
   do { XMEMCPY(&(x), y, 4); } while(0)
@@ -220,13 +215,13 @@ do { x = (((ulong64)((y)[7] & 255))<<56)|(((ulong64)((y)[6] & 255))<<48) | \
 #else /* 64-bit words then  */
 
 #define STORE32H(x, y)        \
-  do { ulong32 LTC_TMPVAR(ttt) = (x); XMEMCPY(y, &LTC_TMPVAR(ttt), 4); } while(0)
+  do { ulong32 ttt = (x); XMEMCPY(y, &ttt, 4); } while(0)
 
 #define LOAD32H(x, y)         \
   do { XMEMCPY(&(x), y, 4); x &= 0xFFFFFFFF; } while(0)
 
 #define STORE64H(x, y)        \
-  do { ulong64 LTC_TMPVAR(ttt) = (x); XMEMCPY(y, &LTC_TMPVAR(ttt), 8); } while(0)
+  do { ulong64 ttt = (x); XMEMCPY(y, &ttt, 8); } while(0)
 
 #define LOAD64H(x, y)         \
   do { XMEMCPY(&(x), y, 8); } while(0)
@@ -263,7 +258,7 @@ do { x = (((ulong64)((y)[7] & 255))<<56)|(((ulong64)((y)[6] & 255))<<48) | \
 
 static inline ulong32 ROL(ulong32 word, int i)
 {
-   __asm__ ("roll %%cl,%0"
+   asm ("roll %%cl,%0"
       :"=r" (word)
       :"0" (word),"c" (i));
    return word;
@@ -271,7 +266,7 @@ static inline ulong32 ROL(ulong32 word, int i)
 
 static inline ulong32 ROR(ulong32 word, int i)
 {
-   __asm__ ("rorl %%cl,%0"
+   asm ("rorl %%cl,%0"
       :"=r" (word)
       :"0" (word),"c" (i));
    return word;
@@ -280,20 +275,20 @@ static inline ulong32 ROR(ulong32 word, int i)
 #ifndef LTC_NO_ROLC
 
 #define ROLc(word,i) ({ \
-   ulong32 LTC_TMPVAR(ROLc) = (word); \
+   ulong32 ROLc_tmp = (word); \
    __asm__ ("roll %2, %0" : \
-            "=r" (LTC_TMPVAR(ROLc)) : \
-            "0" (LTC_TMPVAR(ROLc)), \
+            "=r" (ROLc_tmp) : \
+            "0" (ROLc_tmp), \
             "I" (i)); \
-            LTC_TMPVAR(ROLc); \
+            ROLc_tmp; \
    })
 #define RORc(word,i) ({ \
-   ulong32 LTC_TMPVAR(RORc) = (word); \
+   ulong32 RORc_tmp = (word); \
    __asm__ ("rorl %2, %0" : \
-            "=r" (LTC_TMPVAR(RORc)) : \
-            "0" (LTC_TMPVAR(RORc)), \
+            "=r" (RORc_tmp) : \
+            "0" (RORc_tmp), \
             "I" (i)); \
-            LTC_TMPVAR(RORc); \
+            RORc_tmp; \
    })
 
 #else
@@ -308,7 +303,7 @@ static inline ulong32 ROR(ulong32 word, int i)
 
 static inline ulong32 ROL(ulong32 word, int i)
 {
-   __asm__ ("rotlw %0,%0,%2"
+   asm ("rotlw %0,%0,%2"
       :"=r" (word)
       :"0" (word),"r" (i));
    return word;
@@ -316,7 +311,7 @@ static inline ulong32 ROL(ulong32 word, int i)
 
 static inline ulong32 ROR(ulong32 word, int i)
 {
-   __asm__ ("rotlw %0,%0,%2"
+   asm ("rotlw %0,%0,%2"
       :"=r" (word)
       :"0" (word),"r" (32-i));
    return word;
@@ -326,7 +321,7 @@ static inline ulong32 ROR(ulong32 word, int i)
 
 static inline ulong32 ROLc(ulong32 word, const int i)
 {
-   __asm__ ("rotlwi %0,%0,%2"
+   asm ("rotlwi %0,%0,%2"
       :"=r" (word)
       :"0" (word),"I" (i));
    return word;
@@ -334,7 +329,7 @@ static inline ulong32 ROLc(ulong32 word, const int i)
 
 static inline ulong32 RORc(ulong32 word, const int i)
 {
-   __asm__ ("rotrwi %0,%0,%2"
+   asm ("rotrwi %0,%0,%2"
       :"=r" (word)
       :"0" (word),"I" (i));
    return word;
@@ -381,7 +376,7 @@ static inline ulong32 RORc(ulong32 word, const int i)
 
 static inline ulong64 ROL64(ulong64 word, int i)
 {
-   __asm__("rolq %%cl,%0"
+   asm("rolq %%cl,%0"
       :"=r" (word)
       :"0" (word),"c" (i));
    return word;
@@ -389,7 +384,7 @@ static inline ulong64 ROL64(ulong64 word, int i)
 
 static inline ulong64 ROR64(ulong64 word, int i)
 {
-   __asm__("rorq %%cl,%0"
+   asm("rorq %%cl,%0"
       :"=r" (word)
       :"0" (word),"c" (i));
    return word;
@@ -398,20 +393,20 @@ static inline ulong64 ROR64(ulong64 word, int i)
 #ifndef LTC_NO_ROLC
 
 #define ROL64c(word,i) ({ \
-   ulong64 LTC_TMPVAR(ROL64c) = word; \
+   ulong64 ROL64c_tmp = word; \
    __asm__ ("rolq %2, %0" : \
-            "=r" (LTC_TMPVAR(ROL64c)) : \
-            "0" (LTC_TMPVAR(ROL64c)), \
+            "=r" (ROL64c_tmp) : \
+            "0" (ROL64c_tmp), \
             "J" (i)); \
-            LTC_TMPVAR(ROL64c); \
+            ROL64c_tmp; \
    })
 #define ROR64c(word,i) ({ \
-   ulong64 LTC_TMPVAR(ROR64c) = word; \
+   ulong64 ROR64c_tmp = word; \
    __asm__ ("rorq %2, %0" : \
-            "=r" (LTC_TMPVAR(ROR64c)) : \
-            "0" (LTC_TMPVAR(ROR64c)), \
+            "=r" (ROR64c_tmp) : \
+            "0" (ROR64c_tmp), \
             "J" (i)); \
-            LTC_TMPVAR(ROR64c); \
+            ROR64c_tmp; \
    })
 
 #else /* LTC_NO_ROLC */
@@ -452,11 +447,6 @@ static inline ulong64 ROR64(ulong64 word, int i)
 #ifndef LTC_UNUSED_PARAM
    #define LTC_UNUSED_PARAM(x) (void)(x)
 #endif
-
-/* Calculates the number of bytes required to hold a buffer that will later on be
- * aligned by using LTC_ALIGN_BUF().
- */
-#define LTC_ALIGNED_BUF_SIZE(type, n, align) (((n) + ((align)/sizeof(type))) * sizeof(type))
 
 /* there is no snprintf before Visual C++ 2015 */
 #if defined(_MSC_VER) && _MSC_VER < 1900

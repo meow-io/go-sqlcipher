@@ -30,7 +30,7 @@ sqlite3.c
 Update code from https://github.com/libtom/libtomcrypt
 ------------------------------------------------------
 
-Current HEAD: 6c6d5104de66f3ca0dfd7b68540ef86869982b07
-(from develop branch, 2026-09-01)
+Current HEAD: 2a1b284677a51f587ab7cd9d97395e0c0c93a447
+(from develop branch, 2023-01-18)
 
 Use ./track_libtomcrypt.sh

@@ -15,7 +15,7 @@ Td3[x] = Si[x].[09, 0d, 0b, 0e];
 Td4[x] = Si[x].[01, 01, 01, 01];
 */
 
-#if defined(LTC_RIJNDAEL) && defined(LTC_AES_TAB_C)
+#ifdef LTC_AES_TAB_C
 
 /**
   @file aes_tab.c

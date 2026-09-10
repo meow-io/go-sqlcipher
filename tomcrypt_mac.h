@@ -29,12 +29,13 @@ int hmac_file(int hash, const char *fname, const unsigned char *key,
 #ifdef LTC_OMAC
 
 typedef struct {
-   int             buflen,
+   int             cipher_idx,
+                   buflen,
                    blklen;
    unsigned char   block[MAXBLOCKSIZE],
                    prev[MAXBLOCKSIZE],
                    Lu[2][MAXBLOCKSIZE];
-   symmetric_ECB   key;
+   symmetric_key   key;
 } omac_state;
 
 int omac_init(omac_state *omac, int cipher, const unsigned char *key, unsigned long keylen);
@@ -65,9 +66,10 @@ typedef struct {
                      block[MAXBLOCKSIZE],     /* currently accumulated block */
                      checksum[MAXBLOCKSIZE];  /* current checksum */
 
-   symmetric_ECB     key;                     /* scheduled key for cipher */
+   symmetric_key     key;                     /* scheduled key for cipher */
    unsigned long     block_index;             /* index # for current block */
-   int               block_len,               /* length of block */
+   int               cipher_idx,              /* cipher idx */
+                     block_len,               /* length of block */
                      buflen;                  /* number of bytes in the buffer */
 } pmac_state;
 
@@ -135,42 +137,6 @@ int blake2smac_file(const char *fname, const unsigned char *key, unsigned long k
 int blake2smac_test(void);
 #endif /* LTC_BLAKE2SMAC */
 
-#ifdef LTC_KMAC
-/* values for the `variant` argument of kmac_init() and friends */
-#define LTC_KMAC128       1
-#define LTC_KMAC256       2
-#define LTC_KMAC128_XOF   3
-#define LTC_KMAC256_XOF   4
-
-typedef struct Kmac_state {
-   hash_state sha3;
-   int        xof;
-} kmac_state;
-
-int kmac_init(kmac_state *st, int variant,
-              const unsigned char *key,  unsigned long keylen,
-              const unsigned char *cust, unsigned long custlen);
-int kmac_process(kmac_state *st, const unsigned char *in, unsigned long inlen);
-int kmac_done(kmac_state *st, unsigned char *out, unsigned long *outlen);
-int kmac_memory(int variant,
-                const unsigned char *key,  unsigned long keylen,
-                const unsigned char *cust, unsigned long custlen,
-                const unsigned char *in,   unsigned long inlen,
-                      unsigned char *out,  unsigned long *outlen);
-int kmac_memory_multi(int variant,
-                      const unsigned char *key,  unsigned long keylen,
-                      const unsigned char *cust, unsigned long custlen,
-                            unsigned char *out,  unsigned long *outlen,
-                      const unsigned char *in,   unsigned long inlen, ...)
-                      LTC_NULL_TERMINATED;
-int kmac_file(int variant,
-              const unsigned char *key,  unsigned long keylen,
-              const unsigned char *cust, unsigned long custlen,
-                       const char *fname,
-                    unsigned char *out,  unsigned long *outlen);
-int kmac_test(void);
-#endif /* LTC_KMAC */
-
 #ifdef LTC_BLAKE2BMAC
 typedef hash_state blake2bmac_state;
 int blake2bmac_init(blake2bmac_state *st, unsigned long outlen, const unsigned char *key, unsigned long keylen);
@@ -215,9 +181,10 @@ typedef struct {
    unsigned char K[3][MAXBLOCKSIZE],
                  IV[MAXBLOCKSIZE];
 
-   symmetric_ECB key;
+   symmetric_key key;
 
-             int buflen,
+             int cipher,
+                 buflen,
                  blocksize;
 } xcbc_state;
 
@@ -248,7 +215,7 @@ typedef struct {
                  ACC[MAXBLOCKSIZE],
                  IV[MAXBLOCKSIZE];
 
-   symmetric_ECB key;
+   symmetric_key key;
 
              int cipher,
                  buflen,
@@ -321,6 +288,62 @@ int eax_decrypt_verify_memory(int cipher,
  int eax_test(void);
 #endif /* EAX MODE */
 
+#ifdef LTC_OCB_MODE
+typedef struct {
+   unsigned char     L[MAXBLOCKSIZE],         /* L value */
+                     Ls[32][MAXBLOCKSIZE],    /* L shifted by i bits to the left */
+                     Li[MAXBLOCKSIZE],        /* value of Li [current value, we calc from previous recall] */
+                     Lr[MAXBLOCKSIZE],        /* L * x^-1 */
+                     R[MAXBLOCKSIZE],         /* R value */
+                     checksum[MAXBLOCKSIZE];  /* current checksum */
+
+   symmetric_key     key;                     /* scheduled key for cipher */
+   unsigned long     block_index;             /* index # for current block */
+   int               cipher,                  /* cipher idx */
+                     block_len;               /* length of block */
+} ocb_state;
+
+int ocb_init(ocb_state *ocb, int cipher,
+             const unsigned char *key, unsigned long keylen, const unsigned char *nonce);
+
+int ocb_encrypt(ocb_state *ocb, const unsigned char *pt, unsigned char *ct);
+int ocb_decrypt(ocb_state *ocb, const unsigned char *ct, unsigned char *pt);
+
+int ocb_done_encrypt(ocb_state *ocb,
+                     const unsigned char *pt,  unsigned long ptlen,
+                           unsigned char *ct,
+                           unsigned char *tag, unsigned long *taglen);
+
+int ocb_done_decrypt(ocb_state *ocb,
+                     const unsigned char *ct,  unsigned long ctlen,
+                           unsigned char *pt,
+                     const unsigned char *tag, unsigned long taglen, int *stat);
+
+int ocb_encrypt_authenticate_memory(int cipher,
+    const unsigned char *key,    unsigned long keylen,
+    const unsigned char *nonce,
+    const unsigned char *pt,     unsigned long ptlen,
+          unsigned char *ct,
+          unsigned char *tag,    unsigned long *taglen);
+
+int ocb_decrypt_verify_memory(int cipher,
+    const unsigned char *key,    unsigned long keylen,
+    const unsigned char *nonce,
+    const unsigned char *ct,     unsigned long ctlen,
+          unsigned char *pt,
+    const unsigned char *tag,    unsigned long taglen,
+          int           *stat);
+
+int ocb_test(void);
+
+/* internal functions */
+void ocb_shift_xor(ocb_state *ocb, unsigned char *Z);
+int ocb_ntz(unsigned long x);
+int s_ocb_done(ocb_state *ocb, const unsigned char *pt, unsigned long ptlen,
+               unsigned char *ct, unsigned char *tag, unsigned long *taglen, int mode);
+
+#endif /* LTC_OCB_MODE */
+
 #ifdef LTC_OCB3_MODE
 typedef struct {
    unsigned char     Offset_0[MAXBLOCKSIZE],       /* Offset_0 value */
@@ -335,12 +358,13 @@ typedef struct {
    unsigned char     aSum_current[MAXBLOCKSIZE],    /* AAD related helper variable */
                      aOffset_current[MAXBLOCKSIZE], /* AAD related helper variable */
                      adata_buffer[MAXBLOCKSIZE];    /* AAD buffer */
-
-   symmetric_ECB     key;                     /* scheduled key for cipher */
    int               adata_buffer_bytes;            /* bytes in AAD buffer */
    unsigned long     ablock_index;                  /* index # for current adata (AAD) block */
+
+   symmetric_key     key;                     /* scheduled key for cipher */
    unsigned long     block_index;             /* index # for current data block */
-   int               tag_len,                 /* length of tag */
+   int               cipher,                  /* cipher idx */
+                     tag_len,                 /* length of tag */
                      block_len;               /* length of block */
 } ocb3_state;
 
@@ -383,13 +407,9 @@ int ocb3_test(void);
 #define CCM_DECRYPT LTC_DECRYPT
 
 typedef struct {
-   symmetric_ECB       K;
-   unsigned char       PAD[16],              /* flags | Nonce N | l(m) */
-                       ctr[16],
-                       CTRPAD[16];
-
-
-   int                 taglen,               /* length of the tag (encoded in M value) */
+   symmetric_key       K;
+   int                 cipher,               /* which cipher */
+                       taglen,               /* length of the tag (encoded in M value) */
                        x;                    /* index in PAD */
 
    unsigned long       L,                    /* L value */
@@ -399,7 +419,10 @@ typedef struct {
                        current_aadlen,       /* length of the currently provided add */
                        noncelen;             /* length of the nonce */
 
-   unsigned char       CTRlen;
+   unsigned char       PAD[16],              /* flags | Nonce N | l(m) */
+                       ctr[16],
+                       CTRPAD[16],
+                       CTRlen;
 } ccm_state;
 
 int ccm_init(ccm_state *ccm, int cipher,
@@ -423,7 +446,7 @@ int ccm_done(ccm_state *ccm,
 
 int ccm_memory(int cipher,
     const unsigned char *key,    unsigned long keylen,
-    symmetric_ECB       *uskey,
+    symmetric_key       *uskey,
     const unsigned char *nonce,  unsigned long noncelen,
     const unsigned char *header, unsigned long headerlen,
           unsigned char *pt,     unsigned long ptlen,
@@ -435,14 +458,13 @@ int ccm_test(void);
 
 #endif /* LTC_CCM_MODE */
 
-#if defined(LTC_LRW_MODE) || defined(LTC_GCM_MODE) || defined(LTC_GCM_SIV_MODE)
+#if defined(LRW_MODE) || defined(LTC_GCM_MODE)
 void gcm_gf_mult(const unsigned char *a, const unsigned char *b, unsigned char *c);
 #endif
 
-int gcm_hw_pmul_is_supported(void);
 
 /* table shared between GCM and LRW */
-#if defined(LTC_GCM_TABLES) || defined(LTC_LRW_TABLES) || ((defined(LTC_GCM_MODE) || defined(LTC_GCM_SIV_MODE)) && defined(LTC_FAST))
+#if defined(LTC_GCM_TABLES) || defined(LTC_LRW_TABLES) || ((defined(LTC_GCM_MODE) || defined(LTC_GCM_MODE)) && defined(LTC_FAST))
 extern const unsigned char gcm_shift_table[];
 #endif
 
@@ -456,22 +478,28 @@ extern const unsigned char gcm_shift_table[];
 #define LTC_GCM_MODE_TEXT  2
 
 typedef struct {
-   symmetric_ECB       K;
+   symmetric_key       K;
    unsigned char       H[16],        /* multiplier */
                        X[16],        /* accumulator */
                        Y[16],        /* counter */
                        Y_0[16],      /* initial counter */
                        buf[16];      /* buffer for stuff */
 
-#ifdef LTC_GCM_TABLES
-   unsigned char       PC[16][256][16];  /* 16 tables of 8x128 */
-#endif
-   int                 ivmode,       /* Which mode is the IV in? */
+   int                 cipher,       /* which cipher */
+                       ivmode,       /* Which mode is the IV in? */
                        mode,         /* mode the GCM code is in */
                        buflen;       /* length of data in buf */
 
    ulong64             totlen,       /* 64-bit counter used for IV and AAD */
                        pttotlen;     /* 64-bit counter for the PT */
+
+#ifdef LTC_GCM_TABLES
+   unsigned char       PC[16][256][16]  /* 16 tables of 8x128 */
+#ifdef LTC_GCM_TABLES_SSE2
+LTC_ALIGN(16)
+#endif
+;
+#endif
 } gcm_state;
 
 void gcm_mult_h(const gcm_state *gcm, unsigned char *I);
@@ -514,12 +542,11 @@ typedef struct {
    chacha_state chacha;
    ulong64 aadlen;
    ulong64 ctlen;
-   int aadflg, openssh_compat;
+   int aadflg;
 } chacha20poly1305_state;
 
-#define CHACHA20POLY1305_ENCRYPT          LTC_ENCRYPT
-#define CHACHA20POLY1305_DECRYPT          LTC_DECRYPT
-#define CHACHA20POLY1305_OPENSSH_COMPAT   2
+#define CHACHA20POLY1305_ENCRYPT LTC_ENCRYPT
+#define CHACHA20POLY1305_DECRYPT LTC_DECRYPT
 
 int chacha20poly1305_init(chacha20poly1305_state *st, const unsigned char *key, unsigned long keylen);
 int chacha20poly1305_setiv(chacha20poly1305_state *st, const unsigned char *iv, unsigned long ivlen);
@@ -538,39 +565,3 @@ int chacha20poly1305_memory(const unsigned char *key, unsigned long keylen,
 int chacha20poly1305_test(void);
 
 #endif /* LTC_CHACHA20POLY1305_MODE */
-#ifdef LTC_SIV_MODE
-
-int siv_encrypt_memory(                int  cipher,
-                       const unsigned char *key,    unsigned long  keylen,
-                             unsigned long adnum,
-                       const unsigned char *ad[],   unsigned long  adlen[],
-                       const unsigned char *pt,     unsigned long  ptlen,
-                             unsigned char *ct,     unsigned long *ctlen);
-int siv_decrypt_memory(                int  cipher,
-                       const unsigned char *key,    unsigned long  keylen,
-                             unsigned long adnum,
-                       const unsigned char *ad[],   unsigned long  adlen[],
-                       const unsigned char *ct,     unsigned long  ctlen,
-                             unsigned char *pt,     unsigned long *ptlen);
-int siv_memory(                int  cipher,           int  direction,
-               const unsigned char *key,    unsigned long  keylen,
-               const unsigned char *in,     unsigned long  inlen,
-                     unsigned char *out,    unsigned long *outlen,
-                     unsigned long adnum,
-                                   ...) LTC_NULL_TERMINATED;
-int siv_test(void);
-
-#endif
-
-#ifdef LTC_GCM_SIV_MODE
-/* RFC 8452 - AES-GCM-SIV */
-int gcm_siv_memory(                int  cipher,
-                   const unsigned char *key,    unsigned long  keylen,
-                   const unsigned char *nonce,  unsigned long  noncelen,
-                   const unsigned char *aad,    unsigned long  aadlen,
-                         unsigned char *in,     unsigned long  inlen,
-                         unsigned char *out,
-                         unsigned char *tag,    unsigned long *taglen,
-                                   int  direction);
-int gcm_siv_test(void);
-#endif

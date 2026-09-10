@@ -24,11 +24,11 @@ extern "C" {
 #define SCRYPT  "1.18.2-develop"
 
 /* max size of either a cipher/hash block or symmetric key [largest of the two] */
-#define MAXBLOCKSIZE  168
+#define MAXBLOCKSIZE  144
 
 #ifndef TAB_SIZE
 /* descriptor table size */
-#define TAB_SIZE      48
+#define TAB_SIZE      34
 #endif
 
 /* error codes [will be expanded in future releases] */
@@ -69,16 +69,10 @@ enum {
 
    CRYPT_PK_INVALID_SIZE,  /* Invalid size input for PK parameters */
 
-   CRYPT_INVALID_PRIME_SIZE, /* Invalid size of prime requested */
+   CRYPT_INVALID_PRIME_SIZE,/* Invalid size of prime requested */
    CRYPT_PK_INVALID_PADDING, /* Invalid padding on input */
 
-   CRYPT_HASH_OVERFLOW,     /* Hash applied to too many bits */
-   CRYPT_PW_CTX_MISSING,    /* Password context to decrypt key file is missing */
-   CRYPT_UNKNOWN_PEM,       /* The PEM header was not recognized */
-
-   /* Here only follows the number of error codes.
-    * This will never be returned and shall always be at the end of the enum. */
-   CRYPT_ERR_NUM
+   CRYPT_HASH_OVERFLOW      /* Hash applied to too many bits */
 };
 
 #include "tomcrypt_cfg.h"
