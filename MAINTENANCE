@@ -9,7 +9,7 @@ tracked for changes (maintenance details below):
 Update code from https://github.com/mattn/go-sqlite3
 ----------------------------------------------------
 
-Current release: v1.14.50
+Current release: v1.14.52
 
 Use ./track_go-sqlite3.sh
 
@@ -17,7 +17,7 @@ Use ./track_go-sqlite3.sh
 Update code from https://github.com/sqlcipher/sqlcipher
 -------------------------------------------------------
 
-Current release: v4.18.0
+Current release: v4.19.0
 
 Execute:
 ./configure

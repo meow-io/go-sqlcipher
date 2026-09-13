@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2 - Sep 13th 2026
+
+Upgrade to v4.19.0 of sqlcipher and v1.14.52 of go-sqlite3.
+
+[libtomcrypt](https://github.com/libtom/libtomcrypt) is unchanged from v1.1.1, still at digest 2a1b284677a51f587ab7cd9d97395e0c0c93a447.
+
 ## 1.1.1 - Sep 3rd 2026
 
 Revert [libtomcrypt](https://github.com/libtom/libtomcrypt) to digest 2a1b284677a51f587ab7cd9d97395e0c0c93a447, the digest used up to v1.0.3. Its develop branch does not compile for 64 bit Windows when `LTC_NO_ASM` is set, which this package always sets.
