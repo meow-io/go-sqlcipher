@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0 - Nov 1st 2026
+
+Upgrade to v4.20.0 of sqlcipher.
+
+go-sqlite3 is unchanged from v1.1.2, still at v1.14.52.
+
+[libtomcrypt](https://github.com/libtom/libtomcrypt) is unchanged from v1.1.2, still at digest 2a1b284677a51f587ab7cd9d97395e0c0c93a447.
+
 ## 1.1.2 - Sep 13th 2026
 
 Upgrade to v4.19.0 of sqlcipher and v1.14.52 of go-sqlite3.
