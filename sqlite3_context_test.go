@@ -29,38 +29,53 @@ const contextTestControlledQuery = `
 	SELECT sum(value) FROM numbers`
 
 func TestRowsContextCancelDuringStep(t *testing.T) {
-	conn := openContextTestConn(t)
-	started, stopQuery := registerContextTestQuery(t, conn)
+	for _, laterRow := range []bool{false, true} {
+		t.Run(fmt.Sprintf("laterRow=%t", laterRow), func(t *testing.T) {
+			query := contextTestControlledQuery
+			if laterRow {
+				query = "SELECT 1 UNION ALL SELECT (" + query + ")"
+			}
+			conn := openContextTestConn(t)
+			started, stopQuery := registerContextTestQuery(t, conn)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	rows, err := conn.QueryContext(ctx, contextTestControlledQuery, contextTestQueryArgs(contextTestMaxRows))
-	if err != nil {
-		t.Fatalf("query: %v", err)
-	}
-	defer rows.Close()
+			ctx, cancel := context.WithCancel(context.Background())
+			// Run both the eager first step and a subsequent Next under cancellation.
+			nextDone := make(chan error, 1)
+			go func() {
+				rows, err := conn.QueryContext(ctx, query, contextTestQueryArgs(contextTestMaxRows))
+				if err != nil {
+					nextDone <- err
+					return
+				}
+				defer rows.Close()
+				if laterRow {
+					if err := rows.Next(make([]driver.Value, 1)); err != nil {
+						nextDone <- err
+						return
+					}
+				}
+				nextDone <- rows.Next(make([]driver.Value, 1))
+			}()
 
-	nextDone := make(chan error, 1)
-	go func() {
-		nextDone <- rows.Next(make([]driver.Value, 1))
-	}()
+			select {
+			case <-started:
+			case <-time.After(contextTestTimeout):
+				cancel()
+				_ = stopContextTestQuery(t, stopQuery, nextDone)
+				t.Fatal("query did not start")
+			}
+			cancel()
 
-	select {
-	case <-started:
-	case <-time.After(contextTestTimeout):
-		cancel()
-		_ = stopContextTestQuery(t, stopQuery, nextDone)
-		t.Fatal("query did not start")
-	}
-	cancel()
-
-	select {
-	case err := <-nextDone:
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("Next error = %v, want context.Canceled", err)
-		}
-	case <-time.After(contextTestTimeout):
-		_ = stopContextTestQuery(t, stopQuery, nextDone)
-		t.Fatal("Next did not return after cancellation")
+			select {
+			case err := <-nextDone:
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("Next error = %v, want context.Canceled", err)
+				}
+			case <-time.After(contextTestTimeout):
+				_ = stopContextTestQuery(t, stopQuery, nextDone)
+				t.Fatal("Next did not return after cancellation")
+			}
+		})
 	}
 }
 
@@ -100,14 +115,16 @@ func TestRowsInterruptIgnoresInactiveRows(t *testing.T) {
 	started, stopQuery := registerContextTestQuery(t, conn)
 	activeCtx, cancelActive := context.WithCancel(context.Background())
 	defer cancelActive()
-	activeRows, err := conn.QueryContext(activeCtx, contextTestControlledQuery, contextTestQueryArgs(contextTestMaxRows))
-	if err != nil {
-		t.Fatalf("query active rows: %v", err)
-	}
-	defer activeRows.Close()
-
 	nextDone := make(chan error, 1)
+	activeRowsCh := make(chan *SQLiteRows, 1)
 	go func() {
+		activeRows, err := conn.QueryContext(activeCtx, contextTestControlledQuery, contextTestQueryArgs(contextTestMaxRows))
+		if err != nil {
+			nextDone <- err
+			return
+		}
+		defer activeRows.Close()
+		activeRowsCh <- activeRows.(*SQLiteRows)
 		nextDone <- activeRows.Next(make([]driver.Value, 1))
 	}()
 	select {
@@ -121,6 +138,11 @@ func TestRowsInterruptIgnoresInactiveRows(t *testing.T) {
 	conn.interruptActiveRows(idleRows.(*SQLiteRows))
 	if err := stopContextTestQuery(t, stopQuery, nextDone); err != nil {
 		t.Fatalf("active query was interrupted: %v", err)
+	}
+	select {
+	case rows := <-activeRowsCh:
+		_ = rows
+	default:
 	}
 }
 
@@ -149,14 +171,14 @@ func TestRowsLateInterruptDoesNotAffectReusedStatement(t *testing.T) {
 
 	newCtx, cancelNew := context.WithCancel(context.Background())
 	defer cancelNew()
-	newRows, err := stmt.QueryContext(newCtx, contextTestQueryArgs(contextTestMaxRows))
-	if err != nil {
-		t.Fatalf("query new rows: %v", err)
-	}
-	defer newRows.Close()
-
 	nextDone := make(chan error, 1)
 	go func() {
+		newRows, err := stmt.QueryContext(newCtx, contextTestQueryArgs(contextTestMaxRows))
+		if err != nil {
+			nextDone <- err
+			return
+		}
+		defer newRows.Close()
 		nextDone <- newRows.Next(make([]driver.Value, 1))
 	}()
 	select {
@@ -236,17 +258,19 @@ func TestRowsContextPanicClearsActiveRows(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	rows, err := conn.QueryContext(ctx, "SELECT context_cancel_panic()", nil)
-	if err != nil {
-		t.Fatalf("query: %v", err)
-	}
-	defer rows.Close()
 
+	// The first step runs inside QueryContext, so the panic surfaces
+	// there rather than at Next.
 	var gotPanic any
 	func() {
 		defer func() {
 			gotPanic = recover()
 		}()
+		rows, err := conn.QueryContext(ctx, "SELECT context_cancel_panic()", nil)
+		if err != nil {
+			t.Fatalf("query: %v", err)
+		}
+		defer rows.Close()
 		_ = rows.Next(make([]driver.Value, 1))
 	}()
 	if gotPanic != panicValue {
@@ -289,18 +313,23 @@ func TestDatabaseSQLRowsContextCancelAndReuse(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	rows, err := sqlConn.QueryContext(ctx, contextTestControlledQuery, contextTestMaxRows)
-	if err != nil {
-		t.Fatalf("query: %v", err)
-	}
-
 	nextDone := make(chan error, 1)
 	go func() {
+		rows, err := sqlConn.QueryContext(ctx, contextTestControlledQuery, contextTestMaxRows)
+		if err != nil {
+			nextDone <- err
+			return
+		}
 		if rows.Next() {
+			rows.Close()
 			nextDone <- errors.New("Next returned a row after cancellation")
 			return
 		}
-		nextDone <- rows.Err()
+		err = rows.Err()
+		if closeErr := rows.Close(); err == nil {
+			err = closeErr
+		}
+		nextDone <- err
 	}()
 	select {
 	case <-started:
@@ -319,9 +348,6 @@ func TestDatabaseSQLRowsContextCancelAndReuse(t *testing.T) {
 	case <-time.After(contextTestTimeout):
 		_ = stopContextTestQuery(t, stopQuery, nextDone)
 		t.Fatal("Next did not return after cancellation")
-	}
-	if err := rows.Close(); err != nil {
-		t.Fatalf("close rows: %v", err)
 	}
 
 	var got int
